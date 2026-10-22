@@ -22,7 +22,7 @@ export const validationMessagesPath = ['validation', 'messages'];
 
 export function getFormSchema(fieldCategoryOptions: FieldCategoryOption[]): z.ZodType {
   const defaultTypeSchema = z.looseObject({
-    type: z.undefined('ignore'),
+    type: z.undefined('ignore').optional(),
     get fieldGroup() {
       return z.array(fieldSchema).optional();
     },

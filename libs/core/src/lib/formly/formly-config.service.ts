@@ -7,6 +7,7 @@ import { CoreLibraryService } from '../config/core-library.service';
 export class FormlyConfigService {
   private readonly libraryService = inject(CoreLibraryService);
   private readonly formlyConfig = inject(FormlyConfig);
+  private readonly parentFormlyConfigs = inject(FORMLY_CONFIG, { optional: true, skipSelf: true });
   private readonly formlyConfigs = inject(FORMLY_CONFIG, { optional: true });
   private readonly isBuilderForm = inject(CORE_BUILDER_FORM, { optional: true }) ?? false;
   private loadedLibraryId: string | null = null;
@@ -20,6 +21,7 @@ export class FormlyConfigService {
 
     this.loadedLibraryId = libraryId;
     Object.assign(this.formlyConfig, new FormlyConfig());
+    this.parentFormlyConfigs?.forEach((config) => this.formlyConfig.addConfig(config));
     this.formlyConfigs?.forEach((config) => this.formlyConfig.addConfig(config));
 
     for (const option of library?.configOptions ?? []) {

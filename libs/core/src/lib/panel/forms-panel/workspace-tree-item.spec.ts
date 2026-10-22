@@ -1,5 +1,5 @@
 import { CoreFormService } from '../../editor/core-form.service';
-import { NO_ERRORS_SCHEMA, signal } from '@angular/core';
+import { NO_ERRORS_SCHEMA, provideZonelessChangeDetection, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { CoreLibraryService } from '../../config/core-library.service';
@@ -98,6 +98,7 @@ describe('WorkspaceTreeItem', () => {
     await TestBed.configureTestingModule({
       imports: [WorkspaceTreeItem],
       providers: [
+        provideZonelessChangeDetection(),
         MouseInsideService,
         {
           provide: CoreFormService,

@@ -1,4 +1,5 @@
 import { FormlyConfig, provideFormlyCore } from '@ngx-formly/core';
+import { Injector } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { describe, expect, it } from 'vitest';
 import z from 'zod';
@@ -6,6 +7,8 @@ import { CORE_BUILDER_FORM } from '../formly/types';
 import { CORE_LIBRARY_CONFIGS, LibraryConfig } from './types';
 import { CoreLibraryService } from './core-library.service';
 import { FormlyConfigService } from '../formly/formly-config.service';
+import { CoreFieldWrapper } from '../formly/field-wrapper';
+import { provideCoreConfig } from '../provider';
 
 const configA: LibraryConfig = {
   id: 'config-a',
@@ -114,6 +117,35 @@ describe('CoreConfigService', () => {
     formlyConfigService.loadLibraryConfigOptions();
 
     expect(formlyConfig.getType('runtime-type')).not.toBeNull();
+  });
+
+  it('retains parent editor registrations in isolated Formly scopes when switching profiles', () => {
+    TestBed.configureTestingModule({
+      providers: [provideFormlyCore(), provideCoreConfig([isolatedConfigA, isolatedConfigB])],
+    });
+    const parentConfig = TestBed.inject(FormlyConfig);
+    const libraryService = TestBed.inject(CoreLibraryService);
+    const injector = Injector.create({
+      parent: TestBed.inject(Injector),
+      providers: [provideFormlyCore(), FormlyConfigService],
+    });
+
+    try {
+      const config = injector.get(FormlyConfig);
+      expect(config).not.toBe(parentConfig);
+
+      for (const profile of [isolatedConfigA, isolatedConfigB]) {
+        libraryService.setActiveLibrary(profile.id);
+        injector.get(FormlyConfigService).loadLibraryConfigOptions();
+        expect(config.getWrapper('core-field')?.component).toBe(CoreFieldWrapper);
+        expect(config.extensions['core-field']).toBeDefined();
+        expect(config.getType(`${profile.id}-type`)).not.toBeNull();
+        expect(parentConfig.getType(`${profile.id}-type`)).toBeNull();
+      }
+      expect(config.getType('isolated-a-type')).toBeNull();
+    } finally {
+      injector.destroy();
+    }
   });
 
   it('loads editor options only for builder forms and replaces same-name types', () => {

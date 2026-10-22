@@ -38,7 +38,7 @@ Run commands from the repository root with npm:
 - Use strict type checking. Prefer inference when obvious; avoid `any`, using `unknown` and narrowing for uncertain values.
 - Prefer interfaces for simple object definitions; use type aliases for unions, intersections, mapped types, and other type-level composition.
 - Avoid unnecessary `Boolean(...)` coercion. Use direct boolean expressions for conditions, and prefer `!!value` when an explicit primitive boolean is required.
-- Use standalone components only. Do not add `standalone: true`; it is the Angular 21 default.
+- Use standalone components only. Do not add `standalone: true`; it is the Angular 22 default.
 - Explicitly set `changeDetection: ChangeDetectionStrategy.OnPush` on components. Keep components small and focused; prefer inline templates for compact components.
 - Use `host` metadata for class and event bindings, never `@HostBinding` or `@HostListener`.
 - Use `inject()` instead of constructor injection. Keep services focused on a single responsibility.

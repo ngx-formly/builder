@@ -9,6 +9,7 @@ import { provideRouter } from '@angular/router';
 import { primengPreset, provideCoreTheme } from '@formly-editor/core';
 import { definePreset } from '@primeuix/themes';
 import Aura from '@primeuix/themes/aura';
+import { provideNzDateFnsAdapter } from 'ng-zorro-antd/core/time';
 import { providePrimeNG } from 'primeng/config';
 import { routes } from './app.routes';
 
@@ -18,6 +19,7 @@ export const appConfig: ApplicationConfig = {
     provideZoneChangeDetection({ eventCoalescing: true }),
     provideRouter(routes),
     provideNativeDateAdapter(),
+    provideNzDateFnsAdapter(),
     provideCoreTheme(),
     providePrimeNG({
       theme: {

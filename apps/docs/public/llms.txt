@@ -8,7 +8,7 @@ browser-local demo application. Its Form Editor exports `FormlyFieldConfig[]` st
 an Angular application. The documentation covers demo workflows, configuring Studio from a
 repository checkout, and consuming exported forms. It does not cover embedding the editor in
 another application or installing a published editor SDK. It assumes
-Angular 21 and Formly 7.x. Consult the upstream Formly documentation for runtime APIs, field types,
+Angular 22 and Formly 11.x. Consult the upstream Formly documentation for runtime APIs, field types,
 validation, themes, and UI-library behavior.
 
 ## Start here
@@ -41,7 +41,7 @@ validation, themes, and UI-library behavior.
 - [Configure a UI profile](https://docs.formlystudio.com/developers/configure-a-ui-profile/): Compose runtime registrations, palette metadata, and starter forms.
 - [Add custom components](https://docs.formlystudio.com/developers/add-custom-components/): Expose custom Formly types and their properties in the editor.
 - [Use an exported form](https://docs.formlystudio.com/developers/use-an-exported-form/): Install ngx-formly, register the UI library, and render forms exported from the demo.
-- The Studio demo is built for Angular 21 with Formly 7.x.
+- The Studio demo is built for Angular 22 with Formly 11.x.
 
 ## Upstream Formly resources
 

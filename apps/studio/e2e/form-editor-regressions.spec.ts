@@ -62,6 +62,14 @@ for (const mode of ['inline', 'dialog'] as const) {
     const resizedInput = await dateInput.boundingBox();
     const resizedPopup = await calendar.boundingBox();
     expect(Math.abs(resizedPopup!.x - resizedInput!.x)).toBeLessThan(32);
+    // Material ignores close requests while its opening animation is active.
+    await expect
+      .poll(() =>
+        frame
+          .locator('mat-datepicker-content')
+          .evaluate((content) => content.getAnimations().length),
+      )
+      .toBe(0);
     await calendar.getByRole('button', { name: 'Choose month and year' }).press('Escape');
     await expect(calendar).toBeHidden();
 
