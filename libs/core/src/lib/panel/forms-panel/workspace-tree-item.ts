@@ -119,12 +119,17 @@ import { TreeItem } from '../../shared/tree-item';
           [alwaysShowActions]="alwaysShowFormActions()"
           (click)="selectForm($event)"
         >
-          <div class="flex min-w-0 flex-col gap-0.5">
-            <div class="flex items-center gap-1.5">
+          <button
+            type="button"
+            class="flex min-w-0 flex-col gap-0.5 rounded-sm text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+            [attr.aria-label]="'Open form ' + item.name"
+            [attr.aria-pressed]="isActiveForm()"
+          >
+            <span class="flex items-center gap-1.5">
               <i class="material-symbols-outlined text-content-secondary"> description </i>
               <span class="truncate">{{ item.name }}</span>
-            </div>
-            <div class="ml-8 flex items-center gap-1.5 text-sm text-muted-color">
+            </span>
+            <span class="ml-8 flex items-center gap-1.5 text-sm text-muted-color">
               @if (uiConfigLabel()) {
                 <span>{{ uiConfigLabel() }}</span>
               }
@@ -132,8 +137,8 @@ import { TreeItem } from '../../shared/tree-item';
                 <span>&bull;</span>
                 <span>{{ formFieldCount() + ' Field' + (formFieldCount() === 1 ? '' : 's') }}</span>
               }
-            </div>
-          </div>
+            </span>
+          </button>
 
           <ng-container actions>
             <button

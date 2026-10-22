@@ -68,7 +68,7 @@ import { MouseInsideService } from '../editor/mouse-inside.service';
       </div>
 
       <span
-        class="touch-actions-visible inline-flex shrink-0 gap-2 opacity-0"
+        class="touch-actions-visible inline-flex shrink-0 gap-2 opacity-0 focus-within:opacity-100"
         [class.opacity-100]="isMouseInside() || alwaysShowActions()"
       >
         <ng-content select="[actions]" />

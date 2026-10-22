@@ -1,10 +1,12 @@
 import { computed, inject, Injectable, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormlyFieldConfig } from '@ngx-formly/core';
 import { get, isEmpty, unset } from 'lodash-es';
 import { create } from 'mutative';
 import {
   catchError,
   debounceTime,
+  defer,
   EMPTY,
   filter,
   map,
@@ -53,6 +55,7 @@ export class CoreFormService {
   protected formStoreService = inject(CORE_FORM_STORE);
   protected fieldService = inject(CoreFieldService);
   protected panelService = inject(PanelService);
+  private pendingFormId: string | undefined;
   private readonly autosaveTrigger$ = new Subject<string | null>();
   private readonly autosaveEnabled = this.editorConfig.autoSave === true;
   private readonly autosaveDelay =
@@ -124,12 +127,13 @@ export class CoreFormService {
     this.refreshHierarchy();
 
     if (this.autosaveEnabled) {
-      this.autosaveTrigger$.pipe(debounceTime(this.autosaveDelay)).subscribe((formId) => {
-        if (formId && formId === this.activeFormId()) {
-          // this.saveActiveFormTrigger$.next();
-          this.saveActiveForm();
-        }
-      });
+      this.autosaveTrigger$
+        .pipe(debounceTime(this.autosaveDelay), takeUntilDestroyed())
+        .subscribe((formId) => {
+          if (formId && formId === this.activeFormId() && this.saveStatus() === 'dirty') {
+            this.saveActiveForm();
+          }
+        });
     }
 
     this.saveActiveFormTrigger$
@@ -138,21 +142,35 @@ export class CoreFormService {
         filter((form) => !!form),
         tap(() => this.saveStatusSrc.set('saving')),
         switchMap((form) => {
-          const rawForm = this.convertToRawForm(form);
-
-          return this.formStoreService.updateForm$(this.editorConfig.editorType, rawForm).pipe(
+          return defer(() =>
+            this.formStoreService.updateForm$(
+              this.editorConfig.editorType,
+              this.convertToRawForm(form),
+            ),
+          ).pipe(
             switchMap(() => this.formStoreService.getFormList$(this.editorConfig.editorType)),
+            tap(() => {
+              if (this.activeFormId() === form.id) {
+                this.saveStatusSrc.set(this.activeForm() === form ? 'saved' : 'dirty');
+              }
+            }),
             catchError(() => {
+              this.pendingFormId = undefined;
               this.saveStatusSrc.set('error');
               return EMPTY;
             }),
           );
         }),
+        takeUntilDestroyed(),
       )
       .subscribe({
         next: (formList) => {
           this.formListSrc.set(formList);
-          this.saveStatusSrc.set('saved');
+          if (this.pendingFormId) {
+            const formId = this.pendingFormId;
+            this.pendingFormId = undefined;
+            this.setActiveForm(formId);
+          }
         },
         error: () => this.saveStatusSrc.set('error'),
       });
@@ -243,9 +261,23 @@ export class CoreFormService {
 
   setActiveForm(formId: string | null) {
     if (!formId) {
+      this.pendingFormId = undefined;
       this.activeFormSrc.set(null);
       this.activeFieldIdSrc.set(null);
       this.libraryService.setActiveLibrary(null);
+      return;
+    }
+
+    if (formId === this.activeFormId()) {
+      this.pendingFormId = undefined;
+      return;
+    }
+
+    if (this.activeForm() && this.saveStatus() !== 'saved') {
+      this.pendingFormId = formId;
+      if (this.saveStatus() !== 'saving') {
+        this.saveActiveForm();
+      }
       return;
     }
 

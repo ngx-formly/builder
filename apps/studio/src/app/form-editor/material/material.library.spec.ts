@@ -21,6 +21,24 @@ const collectFieldTypes = (fields: FormlyFieldConfig[]): string[] =>
   ]);
 
 describe('materialFormEditorConfig', () => {
+  it.each([null, { type: 'does-not-exist', key: 'value' }])(
+    'rejects invalid children in untyped groups: %j',
+    (child) => {
+      expect(
+        materialFormEditorConfig.schema.safeParse([{ fieldGroup: [{ fieldGroup: [child] }] }])
+          .success,
+      ).toBe(false);
+    },
+  );
+
+  it('accepts nested untyped groups with registered fields', () => {
+    expect(
+      materialFormEditorConfig.schema.safeParse([
+        { fieldGroup: [{ fieldGroup: [{ type: 'input', key: 'email' }] }] },
+      ]).success,
+    ).toBe(true);
+  });
+
   it('exposes reusable Material field and container options', () => {
     expect(
       materialFormEditorConfig.fieldCategoryOptions.map(({ displayName }) => displayName),

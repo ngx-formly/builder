@@ -1,5 +1,14 @@
 import { DOCUMENT } from '@angular/common';
 import {
+  Overlay,
+  OverlayContainer,
+  OverlayKeyboardDispatcher,
+  OverlayOutsideClickDispatcher,
+  OverlayPositionBuilder,
+  ScrollStrategyOptions,
+} from '@angular/cdk/overlay';
+import { ScrollDispatcher, ViewportRuler } from '@angular/cdk/scrolling';
+import {
   afterNextRender,
   ApplicationRef,
   ChangeDetectionStrategy,
@@ -7,12 +16,15 @@ import {
   ComponentRef,
   computed,
   createComponent,
+  createEnvironmentInjector,
   DestroyRef,
   effect,
   ElementRef,
   EnvironmentInjector,
   inject,
   input,
+  Renderer2,
+  RendererFactory2,
   signal,
   viewChild,
 } from '@angular/core';
@@ -57,11 +69,14 @@ export class FormPreviewContent {
   private readonly environmentInjector = inject(EnvironmentInjector);
   private readonly destroyRef = inject(DestroyRef);
   private readonly document = inject(DOCUMENT);
+  private readonly rendererFactory = inject(RendererFactory2);
   private readonly canvas = viewChild.required<ElementRef<HTMLElement>>('canvas');
   private readonly previewFrame = viewChild.required<ElementRef<HTMLIFrameElement>>('previewFrame');
   private rendererRef: ComponentRef<FormPreviewRenderer> | null = null;
+  private frameInjector: EnvironmentInjector | null = null;
   private resizeObserver: ResizeObserver | null = null;
   private styleObserver: MutationObserver | null = null;
+  private readonly frameStyles = new Map<Element, Element>();
 
   protected readonly canvasWidth = signal(0);
   protected readonly canvasHeight = signal(0);
@@ -97,7 +112,7 @@ export class FormPreviewContent {
     this.destroyRef.onDestroy(() => this.destroyFrame());
   }
 
-  protected initializeFrame(): void {
+  protected async initializeFrame(): Promise<void> {
     this.destroyRenderer();
 
     const frameDocument = this.previewFrame().nativeElement.contentDocument;
@@ -112,15 +127,65 @@ export class FormPreviewContent {
     this.syncFrameStyles(frameDocument);
     this.observeStyles(frameDocument);
 
+    await Promise.all(
+      Array.from(frameDocument.querySelectorAll<HTMLLinkElement>('link[rel="stylesheet"]')).map(
+        (link) =>
+          link.sheet
+            ? Promise.resolve()
+            : new Promise<void>((resolve) => {
+                link.addEventListener('load', () => resolve(), { once: true });
+                link.addEventListener('error', () => resolve(), { once: true });
+              }),
+      ),
+    );
+    if (
+      this.destroyRef.destroyed ||
+      this.previewFrame().nativeElement.contentDocument !== frameDocument
+    ) {
+      return;
+    }
+
     const hostElement = frameDocument.createElement('core-form-preview-renderer');
     frameDocument.body.append(hostElement);
+    this.frameInjector = createEnvironmentInjector(
+      [
+        { provide: DOCUMENT, useValue: frameDocument },
+        { provide: RendererFactory2, useValue: this.createFrameRendererFactory(frameDocument) },
+        Overlay,
+        OverlayContainer,
+        OverlayPositionBuilder,
+        OverlayKeyboardDispatcher,
+        OverlayOutsideClickDispatcher,
+        ScrollStrategyOptions,
+        ScrollDispatcher,
+        ViewportRuler,
+      ],
+      this.environmentInjector,
+    );
     const rendererRef = createComponent(FormPreviewRenderer, {
-      environmentInjector: this.environmentInjector,
+      environmentInjector: this.frameInjector,
       hostElement,
     });
     this.applicationRef.attachView(rendererRef.hostView);
     this.rendererRef = rendererRef;
     rendererRef.setInput('formFields', this.formFields());
+  }
+
+  private createFrameRendererFactory(document: Document): RendererFactory2 {
+    const factory: RendererFactory2 = Object.create(this.rendererFactory);
+    factory.createRenderer = (host, type) => {
+      const parentRenderer = this.rendererFactory.createRenderer(host, type);
+      const renderer: Renderer2 = Object.create(parentRenderer);
+      // Global listeners must follow the preview document, including resize and Escape.
+      renderer.listen = (target, ...args) => {
+        if (target === 'window') target = document.defaultView!;
+        else if (target === 'document') target = document;
+        else if (target === 'body') target = document.body;
+        return parentRenderer.listen(target, ...args);
+      };
+      return renderer;
+    };
+    return factory;
   }
 
   private observeCanvas(): void {
@@ -150,11 +215,34 @@ export class FormPreviewContent {
   }
 
   private syncFrameStyles(frameDocument: Document): void {
-    frameDocument.head.replaceChildren(
-      ...Array.from(this.document.head.querySelectorAll('link[rel="stylesheet"], style')).map(
-        (node) => node.cloneNode(true),
-      ),
+    const sources = Array.from(
+      this.document.head.querySelectorAll('link[rel="stylesheet"], style'),
     );
+    for (const [source, copy] of this.frameStyles) {
+      if (!sources.includes(source)) {
+        copy.remove();
+        this.frameStyles.delete(source);
+      }
+    }
+
+    let previous: Element | null = null;
+    for (const source of sources) {
+      let copy = this.frameStyles.get(source);
+      if (!copy || !copy.isEqualNode(source)) {
+        const updated = source.cloneNode(true) as Element;
+        copy?.replaceWith(updated);
+        copy = updated;
+        this.frameStyles.set(source, copy);
+      }
+      // Keep loaded stylesheets in place while overlays add their component styles.
+      if (copy.parentElement !== frameDocument.head || copy.previousElementSibling !== previous) {
+        frameDocument.head.insertBefore(
+          copy,
+          previous ? previous.nextSibling : frameDocument.head.firstChild,
+        );
+      }
+      previous = copy;
+    }
   }
 
   private destroyRenderer(): void {
@@ -164,6 +252,9 @@ export class FormPreviewContent {
       rendererRef.destroy();
       this.rendererRef = null;
     }
+    this.frameInjector?.destroy();
+    this.frameInjector = null;
+    this.frameStyles.clear();
   }
 
   private destroyFrame(): void {

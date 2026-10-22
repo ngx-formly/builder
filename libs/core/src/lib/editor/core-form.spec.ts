@@ -107,6 +107,7 @@ describe('CoreFormService', () => {
     });
 
     afterEach(() => {
+      vi.restoreAllMocks();
       vi.useRealTimers();
     });
 
@@ -220,6 +221,83 @@ describe('CoreFormService', () => {
 
       vi.advanceTimersByTime(1000);
       expect(service.saveStatus()).toBe('saved');
+    });
+
+    it('saves edits before switching forms during the autosave delay', () => {
+      vi.useFakeTimers();
+      TestBed.resetTestingModule();
+      configureService({ autoSave: true });
+      service.addForm$('First', [], { value: 'initial' }, mockConfig.id).subscribe();
+      const firstId = service.activeFormId()!;
+      service.setActiveModel({ value: 'edited' });
+
+      service.addForm$('Second', [], {}, mockConfig.id).subscribe();
+      expect(service.activeFormName()).toBe('Second');
+      expect(getStoredForm(firstId).model).toEqual({ value: 'edited' });
+      vi.advanceTimersByTime(3000);
+      service.setActiveForm(firstId);
+      expect(service.activeModel()).toEqual({ value: 'edited' });
+    });
+
+    it('waits for the latest edits to save before switching forms', () => {
+      TestBed.resetTestingModule();
+      configureService({}, DeferredFormStoreService);
+      service.addForm$('First', [], {}, mockConfig.id).subscribe();
+      const firstId = service.activeFormId()!;
+      service.addForm$('Second', [], {}, mockConfig.id, false).subscribe();
+      const secondId = service.formList().find((form) => form.name === 'Second')!.id;
+      const store = TestBed.inject(CORE_FORM_STORE) as DeferredFormStoreService;
+
+      service.setActiveModel({ value: 'first edit' });
+      service.setActiveForm(secondId);
+      expect(service.activeFormId()).toBe(firstId);
+      service.setActiveModel({ value: 'latest edit' });
+      store.completeNextUpdate();
+      expect(service.activeFormId()).toBe(firstId);
+      store.completeNextUpdate();
+
+      expect(getStoredForm(firstId).model).toEqual({ value: 'latest edit' });
+      expect(service.activeFormId()).toBe(secondId);
+    });
+
+    it('cancels a pending switch when the current form is selected again', () => {
+      TestBed.resetTestingModule();
+      configureService({}, DeferredFormStoreService);
+      service.addForm$('First', [], {}, mockConfig.id).subscribe();
+      const firstId = service.activeFormId()!;
+      service.addForm$('Second', [], {}, mockConfig.id, false).subscribe();
+      const secondId = service.formList().find((form) => form.name === 'Second')!.id;
+
+      service.setActiveModel({ value: 'edited' });
+      service.setActiveForm(secondId);
+      service.setActiveForm(firstId);
+      (TestBed.inject(CORE_FORM_STORE) as DeferredFormStoreService).completeNextUpdate();
+
+      expect(service.activeFormId()).toBe(firstId);
+      expect(service.saveStatus()).toBe('saved');
+      expect(getStoredForm(firstId).model).toEqual({ value: 'edited' });
+    });
+
+    it('keeps edits open after a storage failure and allows a save retry', () => {
+      service.addForm$('First', [], { value: 'initial' }, mockConfig.id).subscribe();
+      const firstId = service.activeFormId()!;
+      service.addForm$('Second', [], {}, mockConfig.id, false).subscribe();
+      const secondId = service.formList().find((form) => form.name === 'Second')!.id;
+      service.setActiveModel({ value: 'edited' });
+      const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementationOnce(() => {
+        throw new DOMException('Quota exceeded', 'QuotaExceededError');
+      });
+
+      service.setActiveForm(secondId);
+      expect(service.activeFormId()).toBe(firstId);
+      expect(service.saveStatus()).toBe('error');
+      setItem.mockRestore();
+      service.saveActiveForm();
+
+      expect(getStoredForm(firstId).model).toEqual({ value: 'edited' });
+      expect(service.saveStatus()).toBe('saved');
+      service.setActiveForm(secondId);
+      expect(service.activeFormId()).toBe(secondId);
     });
 
     it.each([false, true, undefined])('honors the provider autosave flag %s', (autoSave) => {

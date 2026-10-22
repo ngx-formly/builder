@@ -218,6 +218,24 @@ describe('WorkspaceTreeItem', () => {
   });
 
   describe('form node', () => {
+    it('provides a named native button to open a saved form', async () => {
+      fixture = TestBed.createComponent(WorkspaceTreeItem);
+      fixture.componentRef.setInput('nodeId', 'form-child');
+      await fixture.whenStable();
+
+      const button: HTMLButtonElement = fixture.nativeElement.querySelector(
+        'button[aria-label="Open form Child Form"]',
+      );
+      expect(button.tabIndex).toBe(0);
+      expect(button.getAttribute('aria-pressed')).toBe('false');
+      button.click();
+      expect(setActiveForm).toHaveBeenCalledWith('form-child');
+
+      activeFormId.set('form-child');
+      await fixture.whenStable();
+      expect(button.getAttribute('aria-pressed')).toBe('true');
+    });
+
     it('renders form item, field count, and UI config label', () => {
       fixture = TestBed.createComponent(WorkspaceTreeItem);
       fixture.componentRef.setInput('nodeId', 'form-child');
