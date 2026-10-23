@@ -38,7 +38,8 @@ type-checks a small package-consumer fixture.
 
 - `apps/studio`: hosted reference application.
 - `apps/docs`: author and integration documentation.
-- `libs/core`: editor shell, authoring state, persistence and extension contracts.
+- `libs/state`: headless document models, hierarchy operations, and persistence contracts.
+- `libs/core`: editor shell, UI orchestration, and extension contracts.
 - `libs/ui/material`: reusable Material runtime fields.
 - `libs/ui/builder-material`: editor-only adapters for Material composite fields.
 
@@ -64,3 +65,9 @@ export const appConfig: ApplicationConfig = {
 `provideFormlyBuilder` accepts an editor storage namespace, autosave settings, and a custom
 `FormStoreService` implementation. The package scope and API remain provisional until the first
 public prerelease.
+
+Document models and persistence APIs can also be consumed without importing the editor UI:
+
+```ts
+import { createEmptyWorkspaceHierarchy, type FormStoreService } from '@formly-editor/state';
+```

@@ -4,6 +4,7 @@
   "compileOnSave": false,
   "compilerOptions": {
     "paths": {
+      "@formly-editor/state": ["./libs/state/src/public-api.ts"],
       "@formly-editor/core": ["./libs/core/src/public-api.ts"],
       "@formly-editor/material": ["./libs/ui/material/src/public-api.ts"],
       "@formly-editor/builder-material": ["./libs/ui/builder-material/src/public-api.ts"]
@@ -34,6 +35,12 @@
     },
     {
       "path": "./apps/studio/tsconfig.spec.json"
+    },
+    {
+      "path": "./libs/state/tsconfig.lib.json"
+    },
+    {
+      "path": "./libs/state/tsconfig.spec.json"
     },
     {
       "path": "./libs/core/tsconfig.lib.json"

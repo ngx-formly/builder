@@ -10,6 +10,7 @@
   "homepage": "https://formlystudio.com/",
   "workspaces": [
     "apps/docs",
+    "libs/state",
     "libs/core",
     "libs/ui/material",
     "libs/ui/builder-material"
@@ -21,6 +22,8 @@
     "start:docs": "npm run dev --workspace @formly-editor/docs",
     "build": "npm run build:builder-material && npm run check:packages && npm run build:studio && npm run build:docs",
     "build:studio": "ng build studio",
+    "build:state": "ng build state",
+    "prebuild:core": "npm run build:state",
     "build:core": "ng build core",
     "build:material": "ng build material",
     "prebuild:builder-material": "npm run build:core && npm run build:material",
@@ -30,12 +33,13 @@
     "check:packages": "node scripts/check-package-contracts.mjs && tsc -p integration/package-consumer/tsconfig.json",
     "preview:docs": "npm run preview --workspace @formly-editor/docs",
     "test:e2e": "playwright test --config apps/studio/playwright.config.ts",
-    "test": "npm run test:studio && npm run test:core && npm run test:material && npm run test:builder-material",
+    "test": "npm run test:studio && npm run test:state && npm run test:core && npm run test:material && npm run test:builder-material",
     "test:studio": "ng test studio --watch=false",
+    "test:state": "ng test state --watch=false",
     "test:core": "ng test core --watch=false",
     "test:material": "ng test material --watch=false",
     "test:builder-material": "ng test builder-material --watch=false",
-    "lint": "ng lint studio && ng lint core && ng lint material && ng lint builder-material"
+    "lint": "ng lint studio && ng lint state && ng lint core && ng lint material && ng lint builder-material"
   },
   "private": true,
   "packageManager": "npm@11.19.0",

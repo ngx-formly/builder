@@ -2,6 +2,11 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
 const packages = [
+  {
+    source: 'libs/state/package.json',
+    dist: 'dist/state',
+    forbiddenImports: ['@angular/cdk', '@angular/material', '@formly-editor/core', 'primeng'],
+  },
   { source: 'libs/core/package.json', dist: 'dist/core' },
   { source: 'libs/ui/material/package.json', dist: 'dist/material' },
   { source: 'libs/ui/builder-material/package.json', dist: 'dist/builder-material' },
@@ -66,14 +71,20 @@ for (const definition of packages) {
     ...Object.keys(distManifest.peerDependencies ?? {}),
     ...Object.keys(distManifest.optionalDependencies ?? {}),
   ]);
-  const missing = [...collectBundleImports(bundleDirectory)].filter(
-    (dependency) => !declared.has(dependency),
-  );
+  const bundleImports = collectBundleImports(bundleDirectory);
+  const missing = [...bundleImports].filter((dependency) => !declared.has(dependency));
 
   if (missing.length > 0) {
     failures.push(
       `${sourceManifest.name}: undeclared bundle imports: ${missing.sort().join(', ')}`,
     );
+  }
+
+  const forbidden = (definition.forbiddenImports ?? []).filter((dependency) =>
+    bundleImports.has(dependency),
+  );
+  if (forbidden.length > 0) {
+    failures.push(`${sourceManifest.name}: forbidden bundle imports: ${forbidden.join(', ')}`);
   }
 }
 

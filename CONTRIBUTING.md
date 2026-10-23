@@ -45,6 +45,8 @@ package manifests and type-checks an external-consumer fixture.
 ## Architecture rules
 
 - Keep the Studio application dependent on libraries, not the reverse.
+- Keep `@formly-editor/state` headless: it must not depend on Angular CDK, UI frameworks, or the
+  editor shell.
 - Keep reusable Material runtime fields independent from editor state.
 - Put editor-only Material adapters in `builder-material`.
 - Use Formly type names and JSON-safe configuration as the persistence boundary.
