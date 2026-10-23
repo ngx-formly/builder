@@ -5,7 +5,14 @@ const packages = [
   {
     source: 'libs/state/package.json',
     dist: 'dist/state',
-    forbiddenImports: ['@angular/cdk', '@angular/material', '@formly-editor/core', 'primeng'],
+    forbiddenImports: [
+      '@angular/cdk',
+      '@angular/material',
+      '@formly-editor/builder-material',
+      '@formly-editor/core',
+      '@formly-editor/material',
+      'primeng',
+    ],
   },
   { source: 'libs/core/package.json', dist: 'dist/core' },
   { source: 'libs/ui/material/package.json', dist: 'dist/material' },
