@@ -19,7 +19,7 @@ module.exports = defineConfig([
         'error',
         {
           type: 'element',
-          prefix: 'core',
+          prefix: ['core', 'formly'],
           style: 'kebab-case',
         },
       ],

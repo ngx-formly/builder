@@ -90,8 +90,8 @@ In `form-editor.provider.ts`, import the profile:
 import { appMaterialFormEditorConfig } from './app-material/app-material.library';
 ```
 
-Add it to the existing `provideCoreConfig([...])` array alongside the shipped profiles. Keep
-`provideFormlyCore()`, `provideCore()`, and `provideLocalFormStore()` in place. Templates are already
+Add it to the existing `provideFormlyBuilder({ libraries: [...] })` array alongside the shipped
+profiles. The builder provider configures an isolated Formly runtime and local persistence. Templates are already
 included in the profile; they do not need a separate provider.
 
 ## Verify the profile

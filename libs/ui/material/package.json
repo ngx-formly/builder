@@ -1,5 +1,5 @@
 {
-  "name": "material",
+  "name": "@formly-editor/material",
   "version": "0.0.1",
   "license": "MIT",
   "repository": {
@@ -9,8 +9,13 @@
   },
   "homepage": "https://formlystudio.com/",
   "peerDependencies": {
-    "@angular/common": "^22.0.0",
-    "@angular/core": "^22.0.0"
+    "@angular/core": "^22.0.0",
+    "@angular/forms": "^22.0.0",
+    "@angular/material": "^22.0.0",
+    "@ngx-formly/core": "^11.0.0",
+    "@ngx-formly/material": "^11.0.0",
+    "dompurify": "^3.4.15",
+    "marked": "^18.0.13"
   },
   "dependencies": {
     "tslib": "^2.3.0"

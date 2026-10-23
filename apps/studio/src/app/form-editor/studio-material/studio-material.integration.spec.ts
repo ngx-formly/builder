@@ -5,12 +5,10 @@ import {
   CoreFormService,
   CoreLibraryService,
   PropertyChangeType,
-  provideCore,
-  provideCoreConfig,
-  provideLocalFormStore,
+  provideFormlyBuilder,
 } from '@formly-editor/core';
 import { withStepperType, withTabsType } from '@formly-editor/material';
-import { FormlyConfig, FormlyFieldConfig, provideFormlyCore } from '@ngx-formly/core';
+import { FormlyConfig, FormlyFieldConfig } from '@ngx-formly/core';
 import { firstValueFrom } from 'rxjs';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { materialFormEditorConfig } from '../material/material.library';
@@ -193,10 +191,10 @@ describe('Studio Material profile integration', () => {
     TestBed.resetTestingModule();
     TestBed.configureTestingModule({
       providers: [
-        provideFormlyCore(),
-        provideCore(),
-        provideCoreConfig([materialFormEditorConfig, studioMaterialFormEditorConfig], false),
-        provideLocalFormStore(),
+        provideFormlyBuilder({
+          libraries: [materialFormEditorConfig, studioMaterialFormEditorConfig],
+          autoSave: false,
+        }),
       ],
     });
 

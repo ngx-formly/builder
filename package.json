@@ -9,14 +9,17 @@
   },
   "homepage": "https://formlystudio.com/",
   "workspaces": [
-    "apps/docs"
+    "apps/docs",
+    "libs/core",
+    "libs/ui/material",
+    "libs/ui/builder-material"
   ],
   "scripts": {
     "prepare": "husky",
     "ng": "ng",
     "start": "ng serve studio --host 0.0.0.0",
     "start:docs": "npm run dev --workspace @formly-editor/docs",
-    "build": "npm run build:builder-material && npm run build:studio && npm run build:docs",
+    "build": "npm run build:builder-material && npm run check:packages && npm run build:studio && npm run build:docs",
     "build:studio": "ng build studio",
     "build:core": "ng build core",
     "build:material": "ng build material",
@@ -24,6 +27,7 @@
     "build:builder-material": "ng build builder-material",
     "build:docs": "npm run build --workspace @formly-editor/docs",
     "check:docs": "npm run check --workspace @formly-editor/docs",
+    "check:packages": "node scripts/check-package-contracts.mjs && tsc -p integration/package-consumer/tsconfig.json",
     "preview:docs": "npm run preview --workspace @formly-editor/docs",
     "test:e2e": "playwright test --config apps/studio/playwright.config.ts",
     "test": "npm run test:studio && npm run test:core && npm run test:material && npm run test:builder-material",
@@ -48,6 +52,8 @@
     "@codemirror/lang-javascript": "^6.2.4",
     "@codemirror/lang-json": "^6.0.2",
     "@codemirror/lang-markdown": "^6.5.2",
+    "@codemirror/state": "^6.7.6",
+    "@codemirror/view": "^6.43.15",
     "@dragdroptouch/drag-drop-touch": "^2.0.3",
     "@ngx-formly/bootstrap": "^11.0.0",
     "@ngx-formly/core": "^11.0.0",

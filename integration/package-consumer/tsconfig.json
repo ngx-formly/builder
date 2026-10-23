@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "paths": {
+      "@formly-editor/core": ["../../dist/core"],
+      "@formly-editor/material": ["../../dist/material"],
+      "@formly-editor/builder-material": ["../../dist/builder-material"]
+    }
+  },
+  "files": ["consumer.ts"]
+}

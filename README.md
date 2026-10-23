@@ -1,5 +1,23 @@
-# builder
-A visual form builder for ngx-formly that brings community efforts together. Build Angular forms with drag-and-drop editing, custom components, live previews, and Formly JSON export.
+# ngx-formly Builder
+
+A visual form builder for ngx-formly that brings community efforts together. Build Angular forms
+with drag-and-drop editing, custom components, live previews, and Formly JSON export.
+
+## Project status
+
+The repository is the shared foundation for an official ngx-formly builder. It currently provides
+the Studio application, reusable editor libraries, multiple UI profiles, local persistence, and
+authoring documentation.
+
+The project is preparing its first embeddable package contract. Package names under the temporary
+`@formly-editor` scope are not the final public npm names and no compatibility guarantee is made
+until the first public prerelease. See [CONTRIBUTING.md](CONTRIBUTING.md) before proposing public API
+changes.
+
+The project originated from the community evaluation in
+[ngx-formly discussion #4198](https://github.com/ngx-formly/ngx-formly/discussions/4198). It uses
+Formly Studio as the initial authoring foundation and will incorporate the strongest engineering
+and schema workflows from the other community builders.
 
 ## Development
 
@@ -12,7 +30,37 @@ npm ci
 npm start
 ```
 
-Run `npm test`, `npm run lint`, `npm run check:docs`, and `npm run build` to validate changes.
+Run `npm test`, `npm run lint`, `npm run check:docs`, and `npm run build` to validate changes. The
+build also verifies that every external library import is declared by its published package and
+type-checks a small package-consumer fixture.
 
-## Status
-Debating which library to base it one : https://github.com/ngx-formly/ngx-formly/discussions/4198#discussioncomment-19092874
+## Repository layout
+
+- `apps/studio`: hosted reference application.
+- `apps/docs`: author and integration documentation.
+- `libs/core`: editor shell, authoring state, persistence and extension contracts.
+- `libs/ui/material`: reusable Material runtime fields.
+- `libs/ui/builder-material`: editor-only adapters for Material composite fields.
+
+## Embedding contract (prerelease)
+
+The Studio route uses the same component and provider intended for embedding. Register one or more
+UI profiles, then render the builder component:
+
+```ts
+import { FormlyBuilder, provideFormlyBuilder } from '@formly-editor/core';
+
+@Component({
+  imports: [FormlyBuilder],
+  template: `<formly-builder class="block h-full" />`,
+})
+export class FormEditorPage {}
+
+export const appConfig: ApplicationConfig = {
+  providers: [provideFormlyBuilder({ libraries: [myFormlyLibrary] })],
+};
+```
+
+`provideFormlyBuilder` accepts an editor storage namespace, autosave settings, and a custom
+`FormStoreService` implementation. The package scope and API remain provisional until the first
+public prerelease.
