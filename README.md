@@ -23,7 +23,9 @@ and schema workflows from the other community builders.
 
 Use Node.js 24.15 or newer within the Node.js 24 release line and npm 11.19.0.
 The builder uses Angular 22 and Formly 11.
-PrimeNG 21 and PrimeUIX themes 2 retain their MIT licenses; scoped npm overrides allow PrimeNG's Angular peers to resolve to Angular 22.
+PrimeNG 21 and PrimeUIX themes 2 retain their MIT licenses. Because PrimeNG 21 declares Angular 21
+peers, Angular 22 consumers currently need the scoped npm overrides shown in the package-consumer
+fixture. Removing this compatibility requirement is a prerequisite for a stable public release.
 
 ```sh
 npm ci
@@ -31,8 +33,8 @@ npm start
 ```
 
 Run `npm test`, `npm run lint`, `npm run check:docs`, and `npm run build` to validate changes. The
-build also verifies that every external library import is declared by its published package and
-type-checks a small package-consumer fixture.
+build also verifies that every external library import is declared by its published package, packs
+the libraries, and installs them into a clean package-consumer fixture.
 
 ## Repository layout
 

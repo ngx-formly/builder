@@ -1,13 +1,12 @@
 {
-  "extends": "../../tsconfig.json",
   "compilerOptions": {
+    "lib": ["ES2023", "DOM"],
+    "module": "preserve",
+    "moduleResolution": "bundler",
     "noEmit": true,
-    "paths": {
-      "@formly-editor/state": ["../../dist/state"],
-      "@formly-editor/core": ["../../dist/core"],
-      "@formly-editor/material": ["../../dist/material"],
-      "@formly-editor/builder-material": ["../../dist/builder-material"]
-    }
+    "skipLibCheck": true,
+    "strict": true,
+    "target": "ES2022"
   },
   "files": ["consumer.ts"]
 }

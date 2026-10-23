@@ -30,7 +30,7 @@
     "build:builder-material": "ng build builder-material",
     "build:docs": "npm run build --workspace @formly-editor/docs",
     "check:docs": "npm run check --workspace @formly-editor/docs",
-    "check:packages": "node scripts/check-package-contracts.mjs && tsc -p integration/package-consumer/tsconfig.json",
+    "check:packages": "node scripts/check-package-contracts.mjs && node scripts/check-packed-consumer.mjs",
     "preview:docs": "npm run preview --workspace @formly-editor/docs",
     "test:e2e": "playwright test --config apps/studio/playwright.config.ts",
     "test": "npm run test:studio && npm run test:state && npm run test:core && npm run test:material && npm run test:builder-material",

@@ -40,7 +40,8 @@ npm run test:e2e
 ```
 
 The production build includes package-contract validation. It checks built bundle imports against
-package manifests and type-checks an external-consumer fixture.
+package manifests, packs the libraries, and installs their tarballs into an isolated consumer for
+type-checking and export resolution.
 
 ## Architecture rules
 
