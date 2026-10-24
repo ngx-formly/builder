@@ -9,10 +9,10 @@ The repository is the shared foundation for an official ngx-formly builder. It c
 the Studio application, reusable editor libraries, multiple UI profiles, local persistence, and
 authoring documentation.
 
-The project is preparing its first embeddable package contract. Package names under the temporary
-`@formly-editor` scope are not the final public npm names and no compatibility guarantee is made
-until the first public prerelease. See [CONTRIBUTING.md](CONTRIBUTING.md) before proposing public API
-changes.
+The project is preparing its first embeddable package contract as `@ngx-formly/builder`, with
+companion packages under `@ngx-formly/builder-*`. No compatibility guarantee is made until the
+first public prerelease. See
+[CONTRIBUTING.md](CONTRIBUTING.md) before proposing public API changes.
 
 The project originated from the community evaluation in
 [ngx-formly discussion #4198](https://github.com/ngx-formly/ngx-formly/discussions/4198). It uses
@@ -46,6 +46,26 @@ Chromium, run `npm run check:packages:e2e` to check the packaged editor in a bro
 - `libs/ui/material`: reusable Material runtime fields.
 - `libs/ui/builder-material`: editor-only adapters for Material composite fields.
 
+## Package names
+
+| Source                     | Package                               |
+| -------------------------- | ------------------------------------- |
+| `libs/core`                | `@ngx-formly/builder`                 |
+| `libs/state`               | `@ngx-formly/builder-state`           |
+| `libs/ui/material`         | `@ngx-formly/builder-material-fields` |
+| `libs/ui/builder-material` | `@ngx-formly/builder-material`        |
+
+The builder name maps to the existing editor shell in `libs/core`; source directories, build
+targets, and package boundaries stay the same. It is separate from `@ngx-formly/core`, the Formly
+runtime dependency. The reusable Material fields use `@ngx-formly/builder-material-fields` to
+distinguish them from the existing `@ngx-formly/material` adapter. The private docs and consumer
+workspaces use `@ngx-formly/builder-docs` and `@ngx-formly/builder-package-consumer`.
+
+Existing consumers must use the package names above in their dependencies and TypeScript imports,
+and import the stylesheet from `@ngx-formly/builder/styles.css`. Rebuild and install matching
+tarballs for all packages. Previous package names have no compatibility aliases. Exported symbols
+and saved forms are unchanged.
+
 ## Embedding contract (prerelease)
 
 The Studio route uses the same component and provider intended for embedding. The complete
@@ -74,7 +94,7 @@ Import the packaged stylesheet from the application's global CSS:
 
 ```css
 @layer theme, base, primeng;
-@import '@formly-editor/core/styles.css';
+@import '@ngx-formly/builder/styles.css';
 
 html,
 body,
@@ -105,7 +125,7 @@ Register the PrimeNG theme and one or more UI profiles, then render the builder 
 
 ```ts
 import { ApplicationConfig, ChangeDetectionStrategy, Component } from '@angular/core';
-import { FormlyBuilder, primengPreset, provideFormlyBuilder } from '@formly-editor/core';
+import { FormlyBuilder, primengPreset, provideFormlyBuilder } from '@ngx-formly/builder';
 import { definePreset } from '@primeuix/themes';
 import Aura from '@primeuix/themes/aura';
 import { providePrimeNG } from 'primeng/config';
@@ -138,11 +158,10 @@ theme settings into its existing provider. Toggle the `.dark` class on an ancest
 mode. `provideCoreTheme()` remains available to hosts that also synchronize the code editor theme.
 
 `provideFormlyBuilder` accepts an editor storage namespace, autosave settings, and a custom
-`FormStoreService` implementation. The package scope and API remain provisional until the first
-public prerelease.
+`FormStoreService` implementation. The API remains provisional until the first public prerelease.
 
 Document models and persistence APIs can also be consumed without importing the editor UI:
 
 ```ts
-import { createEmptyWorkspaceHierarchy, type FormStoreService } from '@formly-editor/state';
+import { createEmptyWorkspaceHierarchy, type FormStoreService } from '@ngx-formly/builder-state';
 ```

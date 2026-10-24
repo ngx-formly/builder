@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component } from '@angular/core';
-import { FormlyBuilder } from '@formly-editor/core';
+import { FormlyBuilder } from '@ngx-formly/builder';
 
 @Component({
   selector: 'app-form-editor',

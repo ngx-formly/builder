@@ -1,4 +1,4 @@
-import { withStepperTypeBuilder, withTabsTypeBuilder } from '@formly-editor/builder-material';
+import { withStepperTypeBuilder, withTabsTypeBuilder } from '@ngx-formly/builder-material';
 import {
   withButtonGroupType,
   withCardType,
@@ -11,7 +11,7 @@ import {
   withStepType,
   withTabsType,
   withTabType,
-} from '@formly-editor/material';
+} from '@ngx-formly/builder-material-fields';
 import { ConfigOption } from '@ngx-formly/core';
 import { materialConfigOptions } from '../material/material.config';
 

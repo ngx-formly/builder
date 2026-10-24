@@ -1,4 +1,4 @@
-import { withStepperType } from '@formly-editor/material';
+import { withStepperType } from '@ngx-formly/builder-material-fields';
 import { ConfigOption } from '@ngx-formly/core';
 import { StepperTypeBuilder } from './stepper.builder';
 

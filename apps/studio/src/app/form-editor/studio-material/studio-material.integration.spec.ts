@@ -1,13 +1,13 @@
 import { TestBed } from '@angular/core/testing';
-import { withStepperTypeBuilder, withTabsTypeBuilder } from '@formly-editor/builder-material';
+import { withStepperTypeBuilder, withTabsTypeBuilder } from '@ngx-formly/builder-material';
 import {
   BuilderFieldStateService,
   CoreFormService,
   CoreLibraryService,
   PropertyChangeType,
   provideFormlyBuilder,
-} from '@formly-editor/core';
-import { withStepperType, withTabsType } from '@formly-editor/material';
+} from '@ngx-formly/builder';
+import { withStepperType, withTabsType } from '@ngx-formly/builder-material-fields';
 import { FormlyConfig, FormlyFieldConfig } from '@ngx-formly/core';
 import { firstValueFrom } from 'rxjs';
 import { beforeEach, describe, expect, it } from 'vitest';

@@ -1,5 +1,5 @@
 {
-  "name": "@formly-editor/core",
+  "name": "@ngx-formly/builder",
   "version": "0.0.1",
   "license": "MIT",
   "repository": {
@@ -24,7 +24,7 @@
     "@codemirror/lang-markdown": "^6.5.2",
     "@codemirror/state": "^6.7.6",
     "@codemirror/view": "^6.43.15",
-    "@formly-editor/state": "0.0.1",
+    "@ngx-formly/builder-state": "0.0.1",
     "@ngx-formly/core": "^11.0.0",
     "@primeuix/themes": "^2.0.3",
     "@uiw/codemirror-theme-vscode": "^4.25.11",

@@ -5,10 +5,10 @@ import {
   createLibrary,
   primengPreset,
   provideFormlyBuilder,
-} from '@formly-editor/core';
-import { withMarkdownType, withTabsType } from '@formly-editor/material';
-import { withTabsTypeBuilder } from '@formly-editor/builder-material';
-import { createEmptyWorkspaceHierarchy, type FormStoreService } from '@formly-editor/state';
+} from '@ngx-formly/builder';
+import { withMarkdownType, withTabsType } from '@ngx-formly/builder-material-fields';
+import { withTabsTypeBuilder } from '@ngx-formly/builder-material';
+import { createEmptyWorkspaceHierarchy, type FormStoreService } from '@ngx-formly/builder-state';
 import { definePreset } from '@primeuix/themes';
 import Aura from '@primeuix/themes/aura';
 import { providePrimeNG } from 'primeng/config';

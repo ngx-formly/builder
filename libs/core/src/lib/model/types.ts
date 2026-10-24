@@ -11,4 +11,4 @@ export type {
   WorkspaceHierarchy,
   WorkspaceNode,
   WorkspaceNodeType,
-} from '@formly-editor/state';
+} from '@ngx-formly/builder-state';

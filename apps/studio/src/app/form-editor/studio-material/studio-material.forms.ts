@@ -1,4 +1,4 @@
-import { DefaultForm } from '@formly-editor/core';
+import { DefaultForm } from '@ngx-formly/builder';
 import { FormlyFieldConfig } from '@ngx-formly/core';
 
 const studioMaterialShowcaseFields: FormlyFieldConfig[] = [

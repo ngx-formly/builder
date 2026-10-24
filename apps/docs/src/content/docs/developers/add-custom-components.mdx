@@ -12,7 +12,7 @@ registered Formly type; component implementation remains ordinary ngx-formly cod
 Replace the profile's runtime factory with:
 
 ```ts title="app-material.config.ts"
-import { withPostalCodeType } from '@formly-editor/material';
+import { withPostalCodeType } from '@ngx-formly/builder-material-fields';
 import { materialConfigOptions } from '../material/material.config';
 
 export function appMaterialConfigOptions() {
@@ -33,7 +33,7 @@ refer to components without containing Angular classes. See Formly's
 Replace the catalog alias with a composed catalog:
 
 ```ts title="app-material.options.ts"
-import { createInputProperty, FieldTypeOption } from '@formly-editor/core';
+import { createInputProperty, FieldTypeOption } from '@ngx-formly/builder';
 import {
   formFieldWrapperOptions,
   keyProp,
@@ -102,7 +102,7 @@ For groups, use `isParent: true` with `fieldGroup`; repeaters also use `isFieldA
 editor state model.
 
 Tabs and steppers need special authoring behavior in Studio. Their `builderConfigOptions` use
-adapters from `@formly-editor/builder-material`; `configOptions` retain the real runtime components
+adapters from `@ngx-formly/builder-material`; `configOptions` retain the real runtime components
 for Preview. Simple fields such as postal code do not need a builder override.
 
 ## Runtime portability and checks

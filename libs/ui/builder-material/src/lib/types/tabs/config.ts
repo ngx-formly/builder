@@ -1,4 +1,4 @@
-import { withTabsType } from '@formly-editor/material';
+import { withTabsType } from '@ngx-formly/builder-material-fields';
 import { ConfigOption } from '@ngx-formly/core';
 import { TabsTypeBuilder } from './tabs.builder';
 

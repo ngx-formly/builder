@@ -7,7 +7,7 @@ import {
   createSelectProperty,
   FieldTypeOption,
   FieldWrapperOption,
-} from '@formly-editor/core';
+} from '@ngx-formly/builder';
 
 const keyProp = createInputProperty({
   label: 'Key',

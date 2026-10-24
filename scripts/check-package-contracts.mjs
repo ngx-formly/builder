@@ -8,9 +8,9 @@ const packages = [
     forbiddenImports: [
       '@angular/cdk',
       '@angular/material',
-      '@formly-editor/builder-material',
-      '@formly-editor/core',
-      '@formly-editor/material',
+      '@ngx-formly/builder',
+      '@ngx-formly/builder-material',
+      '@ngx-formly/builder-material-fields',
       'primeng',
     ],
   },
@@ -98,7 +98,10 @@ for (const definition of packages) {
 for (const definition of packages) {
   const manifest = readJson(definition.source);
   for (const dependency of Object.keys(manifest.peerDependencies ?? {})) {
-    if (dependency.startsWith('@formly-editor/') && !sourceNames.has(dependency)) {
+    if (
+      (dependency === '@ngx-formly/builder' || dependency.startsWith('@ngx-formly/builder-')) &&
+      !sourceNames.has(dependency)
+    ) {
       failures.push(`${manifest.name}: internal peer ${dependency} does not match a package name`);
     }
   }

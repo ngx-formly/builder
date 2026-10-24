@@ -1,5 +1,5 @@
 @layer theme, base, primeng;
-@import '@formly-editor/core/styles.css';
+@import '@ngx-formly/builder/styles.css';
 
 html,
 body,
