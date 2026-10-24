@@ -82,6 +82,12 @@ jobs:
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
 
+      - name: Build library packages
+        run: npm run build:builder-material
+
+      - name: Test the packed editor in a consumer application
+        run: npm run check:packages:e2e
+
       - name: Run browser tests
         run: npm run test:e2e
 

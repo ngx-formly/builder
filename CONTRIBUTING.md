@@ -37,11 +37,16 @@ Install Playwright Chromium once before running browser tests:
 ```sh
 npx playwright install chromium
 npm run test:e2e
+npm run build:builder-material
+npm run check:packages:e2e
 ```
 
 The production build includes package-contract validation. It checks built bundle imports against
-package manifests, packs the libraries, and installs their tarballs into an isolated consumer for
-type-checking and export resolution.
+package manifests, packs the libraries, and installs their tarballs into an isolated Angular
+consumer for type-checking, export resolution, and a production build. `check:packages:e2e` also
+opens that consumer in Chromium at desktop and mobile sizes, checks its styles, and creates a form.
+It uses port 4314 and does not reuse a running server. CI runs this alongside the Studio browser
+tests.
 
 ## Architecture rules
 

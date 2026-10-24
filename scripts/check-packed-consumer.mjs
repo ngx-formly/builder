@@ -17,6 +17,7 @@ function run(command, args, options = {}) {
     cwd: fixtureRoot,
     encoding: 'utf8',
     stdio: options.capture ? 'pipe' : 'inherit',
+    env: { ...process.env, FORMLY_CONSUMER_ROOT: fixtureRoot },
   });
 }
 
@@ -29,8 +30,16 @@ function runNpm(args, options = {}) {
 
 try {
   mkdirSync(tarballDirectory);
-  cpSync(join(fixtureSource, 'consumer.ts'), join(fixtureRoot, 'consumer.ts'));
-  cpSync(join(fixtureSource, 'tsconfig.json'), join(fixtureRoot, 'tsconfig.json'));
+  for (const file of [
+    'consumer.ts',
+    'tsconfig.json',
+    'angular.json',
+    '.postcssrc.json',
+    'index.html',
+    'styles.css',
+  ]) {
+    cpSync(join(fixtureSource, file), join(fixtureRoot, file));
+  }
 
   const fixtureManifest = JSON.parse(readFileSync(join(fixtureSource, 'package.json'), 'utf8'));
 
@@ -48,19 +57,29 @@ try {
   writeFileSync(join(fixtureRoot, 'package.json'), `${JSON.stringify(fixtureManifest, null, 2)}\n`);
 
   runNpm(['install', '--ignore-scripts', '--no-package-lock']);
-  runNpm(['exec', '--', 'tsc', '-p', 'tsconfig.json']);
+  runNpm(['exec', '--', 'tsc', '--noEmit', '-p', 'tsconfig.json']);
+  runNpm(['run', 'build']);
   run(nodeCommand, [
     '--input-type=module',
     '--eval',
     [
       "import { existsSync } from 'node:fs';",
       "import { fileURLToPath } from 'node:url';",
-      "for (const name of ['@formly-editor/state', '@formly-editor/core', '@formly-editor/material', '@formly-editor/builder-material']) {",
+      "for (const name of ['@formly-editor/state', '@formly-editor/core', '@formly-editor/core/styles.css', '@formly-editor/material', '@formly-editor/builder-material']) {",
       '  const entryPoint = fileURLToPath(import.meta.resolve(name));',
       '  if (!existsSync(entryPoint)) throw new Error(`Missing package entry point: ${name}`);',
       '}',
     ].join('\n'),
   ]);
+
+  if (process.argv.includes('--browser')) {
+    run(nodeCommand, [
+      join(workspaceRoot, 'node_modules/@playwright/test/cli.js'),
+      'test',
+      '--config',
+      join(fixtureSource, 'playwright.config.ts'),
+    ]);
+  }
 
   console.log('Validated packed packages in a clean consumer installation.');
 } finally {

@@ -1,4 +1,4 @@
-@import './tailwind-styling';
+@import './tailwind-styling.css';
 
 @theme {
   --color-content-background: var(--p-content-background);
