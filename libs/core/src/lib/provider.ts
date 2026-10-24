@@ -1,5 +1,10 @@
 import { EnvironmentProviders, makeEnvironmentProviders, signal, Type } from '@angular/core';
-import { ConfigOption, FormlyFieldConfig, provideFormlyConfig } from '@ngx-formly/core';
+import {
+  ConfigOption,
+  FormlyFieldConfig,
+  provideFormlyConfig,
+  provideFormlyCore,
+} from '@ngx-formly/core';
 import { CoreFieldService } from './config/core-field.service';
 import { CoreLibraryService } from './config/core-library.service';
 import { defaultTypeOption } from './config/library';
@@ -7,6 +12,7 @@ import {
   CORE_EDITOR_CONFIG,
   CORE_LIBRARY_CONFIGS,
   CoreEditorConfig,
+  FormlyBuilderConfig,
   LibraryConfig,
 } from './config/types';
 import { BuilderFieldStateService } from './editor/builder-field-state.service';
@@ -55,11 +61,13 @@ export function provideCoreTheme(): EnvironmentProviders {
 export function provideCoreConfig(
   libraryConfig: LibraryConfig[],
   autoSave = true,
+  overrides: Partial<Pick<CoreEditorConfig, 'editorType' | 'autoSaveDelay'>> = {},
 ): EnvironmentProviders {
   const editorConfig: CoreEditorConfig = {
-    editorType: 'form-editor',
+    editorType: overrides.editorType ?? 'form-editor',
     defaultTypeOption,
     autoSave,
+    autoSaveDelay: overrides.autoSaveDelay,
   };
   const formlyConfig: ConfigOption = {
     wrappers: [{ name: 'core-field', component: CoreFieldWrapper }],
@@ -95,6 +103,24 @@ export function provideCoreConfig(
     },
     CoreLibraryService,
     provideFormlyConfig(formlyConfig),
+  ]);
+}
+
+/** Configures an embeddable Formly Builder and its isolated Formly runtime. */
+export function provideFormlyBuilder(config: FormlyBuilderConfig): EnvironmentProviders {
+  const formStore = config.formStore ?? LocalFormStoreService;
+
+  return makeEnvironmentProviders([
+    provideFormlyCore(),
+    provideCore(),
+    provideCoreConfig(config.libraries, config.autoSave ?? true, {
+      editorType: config.editorType,
+      autoSaveDelay: config.autoSaveDelay,
+    }),
+    {
+      provide: CORE_FORM_STORE,
+      useClass: formStore,
+    },
   ]);
 }
 

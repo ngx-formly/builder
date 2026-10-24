@@ -1,4 +1,4 @@
-# Copilot Instructions: Formly Editor
+# Copilot Instructions: ngx-formly Builder
 
 The user is an experienced senior software engineer. Provide concise, high-signal technical responses focused on architecture, performance, and edge cases. Skip introductory tutorials, basic syntax explanations, and boilerplate pleasantries. Write functional, maintainable, performant, and accessible code.
 
@@ -13,14 +13,20 @@ The user is an experienced senior software engineer. Provide concise, high-signa
 
 Source code, tests, and current documentation in `apps/docs/src/content/docs/` define supported behavior. Start at `README.md` and `apps/docs/src/content/docs/developers/index.mdx`.
 
-This is a root Angular CLI workspace with private npm workspaces:
+This is an Angular CLI workspace with npm workspaces. The application workspaces are private; the
+library workspaces define provisional publishable package contracts:
 
 - `apps/studio`: Browser-local Angular editor application and shell.
 - `apps/docs`: Astro/Starlight public documentation site, built independently of Angular.
-- `libs/core`: Formly-backed editor framework, normalized state, runtime primitives, layout panels, configuration, and serialization.
-- `libs/ui/material`: Internal Material UI and Formly integrations.
+- `libs/state`: Headless document models, hierarchy operations, and persistence contracts.
+- `libs/core`: Formly-backed editor shell, configuration, field editing, layout panels, and serialization.
+- `libs/ui/material`: Reusable Material runtime fields and Formly integrations.
+- `libs/ui/builder-material`: Editor-only adapters for Material composite fields.
 
-Libraries are internal source-only modules. Import across libraries through their `@formly-editor/*` public barrels. Keep barrels limited to externally consumed symbols; do not export implementation details. Core must not depend on UI integrations or application code.
+Import across libraries through their provisional `@formly-editor/*` public entry points. Keep
+entry points limited to supported consumer APIs; do not export implementation details. State must
+not depend on UI frameworks or the editor shell. Core must not depend on UI integrations or
+application code.
 
 - Keep hierarchical editor state normalized using `nodeMap`, `rootNodeIds`, and existing adjacency metadata such as `parentId`, `childIds`, and `idPath`. Use pure immutable updates, indexed lookups, and existing path-recalculation utilities instead of mutating nested trees.
 - When deleting fields, folders, or forms, clean parent references, root lists, and selection state without leaving orphan nodes.
@@ -30,7 +36,8 @@ Libraries are internal source-only modules. Import across libraries through thei
 Run commands from the repository root with npm:
 
 - Studio: `npm start`, `npm run build:studio`.
-- Focused unit suites: `npm run test:studio`, `npm run test:core`, `npm run test:material`.
+- Focused unit suites: `npm run test:studio`, `npm run test:state`, `npm run test:core`, `npm run test:material`, `npm run test:builder-material`.
+- Package contracts: `npm run check:packages` after building the library packages.
 - Check `package.json` before suggesting other commands; archived commands are not supported setup instructions.
 
 ## TypeScript And Angular Standards

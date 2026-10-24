@@ -1,0 +1,12 @@
+{
+  "compilerOptions": {
+    "experimentalDecorators": true,
+    "lib": ["ES2023", "DOM"],
+    "module": "preserve",
+    "moduleResolution": "bundler",
+    "skipLibCheck": true,
+    "strict": true,
+    "target": "ES2022"
+  },
+  "files": ["consumer.ts"]
+}

@@ -21,7 +21,7 @@ import { RHSSidebar } from './sidebar/rhs-sidebar';
 import { TABLET_PANEL_OPTIONS, TabletSidebar } from './sidebar/tablet-sidebar';
 
 @Component({
-  selector: 'core-root',
+  selector: 'formly-builder',
   changeDetection: ChangeDetectionStrategy.OnPush,
   providers: [MessageService],
   imports: [
@@ -100,7 +100,7 @@ import { TABLET_PANEL_OPTIONS, TabletSidebar } from './sidebar/tablet-sidebar';
     <p-toast position="bottom-center" />
   `,
 })
-export class Core {
+export class FormlyBuilder {
   private readonly destroyRef = inject(DestroyRef);
   private readonly responsiveService = inject(CoreResponsiveService);
   private readonly panelService = inject(PanelService);

@@ -18,7 +18,8 @@ The dependency direction is one-way:
 - Material does not depend on core or builder-material.
 - Core does not depend on either UI library.
 
-This is an internal source library, not a published SDK package.
+This is a prerelease package boundary. The temporary `@formly-editor` name is not the final public
+npm name and its API remains unstable until the first public prerelease.
 
 ## Registration
 

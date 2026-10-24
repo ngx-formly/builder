@@ -1,32 +1,16 @@
 import { TestBed } from '@angular/core/testing';
 import { describe, expect, it } from 'vitest';
-import z from 'zod';
-import { CORE_LIBRARY_CONFIGS, LibraryConfig } from '../config/types';
 import { WorkspaceHierarchy } from '../model/types';
 import { LocalFormStoreService } from './local-form-store.service';
 
 describe('LocalFormStoreService', () => {
   let service: LocalFormStoreService;
   const editorId = 'test-editor';
-  const config: LibraryConfig = {
-    id: editorId,
-    label: 'Test Editor',
-    configOptions: [],
-    fieldCategoryOptions: [],
-    formTemplates: [],
-    schema: z.any(),
-    defaultTypeOption: {
-      name: 'default',
-      displayName: 'Default',
-      defaultConfig: {},
-      materialSymbol: 'code',
-    },
-  };
 
   beforeEach(() => {
     localStorage.clear();
     TestBed.configureTestingModule({
-      providers: [LocalFormStoreService, { provide: CORE_LIBRARY_CONFIGS, useValue: [config] }],
+      providers: [LocalFormStoreService],
     });
     service = TestBed.inject(LocalFormStoreService);
   });
@@ -131,13 +115,7 @@ describe('LocalFormStoreService', () => {
   it('isolates storage across editor ids', () => {
     TestBed.resetTestingModule();
     TestBed.configureTestingModule({
-      providers: [
-        LocalFormStoreService,
-        {
-          provide: CORE_LIBRARY_CONFIGS,
-          useValue: [config, { ...config, id: 'alternate-editor' }],
-        },
-      ],
+      providers: [LocalFormStoreService],
     });
     service = TestBed.inject(LocalFormStoreService);
     service
@@ -165,13 +143,7 @@ describe('LocalFormStoreService', () => {
   it('isolates storage across editor families', () => {
     TestBed.resetTestingModule();
     TestBed.configureTestingModule({
-      providers: [
-        LocalFormStoreService,
-        {
-          provide: CORE_LIBRARY_CONFIGS,
-          useValue: [config, { ...config, id: 'alternate-editor', editorType: 'alternate-editor' }],
-        },
-      ],
+      providers: [LocalFormStoreService],
     });
     service = TestBed.inject(LocalFormStoreService);
     service

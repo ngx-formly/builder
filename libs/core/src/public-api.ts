@@ -4,11 +4,14 @@
 
 export * from './lib/properties';
 
-export { Core } from './lib/core';
+export { FormlyBuilder } from './lib/core';
+/** @deprecated Use FormlyBuilder. */
+export { FormlyBuilder as Core } from './lib/core';
 
 export {
   CORE_LIBRARY_CONFIGS,
   type CoreEditorConfig,
+  type FormlyBuilderConfig,
   type FieldCategoryOption,
   type FieldTypeOption,
   type FieldTypePreset,
@@ -58,6 +61,7 @@ export {
   provideCore,
   provideCoreConfig,
   provideCoreTheme,
+  provideFormlyBuilder,
   provideFormStore,
   provideLocalFormStore,
 } from './lib/provider';

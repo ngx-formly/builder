@@ -1,0 +1,14 @@
+@layer theme, base, primeng;
+@import '@formly-editor/core/styles.css';
+
+html,
+body,
+app-root {
+  display: block;
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: sans-serif;
+}

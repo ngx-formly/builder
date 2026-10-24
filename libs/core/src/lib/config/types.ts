@@ -1,9 +1,10 @@
-import { InjectionToken } from '@angular/core';
+import { InjectionToken, Type } from '@angular/core';
 import { ConfigOption, FormlyFieldConfig } from '@ngx-formly/core';
 import { ZodType } from 'zod';
 import { DefaultForm } from '../model/types';
 import { PropertyConfig } from '../properties/types';
 import type { FieldValidationConfig } from '../properties/validation-messages/validation.types';
+import type { FormStoreService } from '../persistence/types';
 
 /**
  * A category of field types shown in the UI.
@@ -99,6 +100,20 @@ export interface CoreEditorConfig {
   autoSave?: boolean;
   /** Delay in milliseconds before an active form mutation is persisted. */
   autoSaveDelay?: number;
+}
+
+/** Public configuration for an embedded Formly Builder instance. */
+export interface FormlyBuilderConfig {
+  /** Formly UI profiles available to authors. */
+  libraries: LibraryConfig[];
+  /** Storage namespace used to isolate this editor's documents. */
+  editorType?: string;
+  /** Enable debounced persistence for active form mutations. Defaults to true. */
+  autoSave?: boolean;
+  /** Delay in milliseconds before an active form mutation is persisted. */
+  autoSaveDelay?: number;
+  /** Persistence implementation. Defaults to browser local storage. */
+  formStore?: Type<FormStoreService>;
 }
 
 export const CORE_EDITOR_CONFIG = new InjectionToken<CoreEditorConfig>('CoreLibraryEditorConfig');
