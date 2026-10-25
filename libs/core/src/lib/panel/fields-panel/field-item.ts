@@ -20,11 +20,12 @@ import { CoreFieldService } from '../../config/core-field.service';
 import { CoreFormService } from '../../editor/core-form.service';
 import { FieldPresetDialogService } from '../../field-preset/field-preset-dialog.service';
 import { Tooltip, TreeItem } from '../../shared';
+import { ChipStyleFix } from '../../shared/chip-style-fix';
 
 @Component({
   selector: 'core-panel-field-item',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ButtonDirective, ButtonIcon, Tooltip, Chip, TieredMenu, TreeItem],
+  imports: [ButtonDirective, ButtonIcon, Tooltip, Chip, ChipStyleFix, TieredMenu, TreeItem],
   template: `
     <core-tree-item
       #folderTreeItem
@@ -62,6 +63,7 @@ import { Tooltip, TreeItem } from '../../shared';
         @if (fieldInfo().badges; as badges) {
           @for (badge of badges; track badge.label) {
             <p-chip
+              coreChipStyleFix
               class="py-0 text-sm"
               tooltipPosition="top"
               [coreTooltip]="badge.description"

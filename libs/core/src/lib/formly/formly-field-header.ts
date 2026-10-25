@@ -17,11 +17,12 @@ import { CoreFormService } from '../editor/core-form.service';
 import { FieldPresetDialogService } from '../field-preset/field-preset-dialog.service';
 import { EditorField, FieldInfo } from '../model/types';
 import { Tooltip } from '../shared';
+import { ChipStyleFix } from '../shared/chip-style-fix';
 
 @Component({
   selector: 'core-formly-field-header',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ButtonDirective, ButtonIcon, Tooltip, Chip, Menu, TieredMenu],
+  imports: [ButtonDirective, ButtonIcon, Tooltip, Chip, ChipStyleFix, Menu, TieredMenu],
   host: {
     class: 'flex justify-between rounded-t-sm bg-primary/20 px-2',
     '[class.cursor-grab]': 'isDraggable()',
@@ -46,6 +47,7 @@ import { Tooltip } from '../shared';
       @if (fieldInfo().badges; as badges) {
         @for (badge of badges; track badge.label) {
           <p-chip
+            coreChipStyleFix
             class="py-0 text-sm"
             tooltipPosition="top"
             [coreTooltip]="badge.description"

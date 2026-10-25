@@ -7,10 +7,8 @@ import {
   ViewContainerRef,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { MessageService } from 'primeng/api';
 import { Drawer } from 'primeng/drawer';
 import { Splitter } from 'primeng/splitter';
-import { Toast } from 'primeng/toast';
 import { CoreResponsiveService } from './core-responsive.service';
 import { PanelService } from './editor/panel.service';
 import { LHSPanelType, RHSPanelType } from './editor/types';
@@ -23,17 +21,7 @@ import { TABLET_PANEL_OPTIONS, TabletSidebar } from './sidebar/tablet-sidebar';
 @Component({
   selector: 'formly-builder',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  providers: [MessageService],
-  imports: [
-    FormPanel,
-    Drawer,
-    PanelOptionList,
-    Splitter,
-    LHSSidebar,
-    RHSSidebar,
-    TabletSidebar,
-    Toast,
-  ],
+  imports: [FormPanel, Drawer, PanelOptionList, Splitter, LHSSidebar, RHSSidebar, TabletSidebar],
   host: { class: 'core-root block h-full min-h-0' },
   template: `
     @if (isDesktop()) {
@@ -97,7 +85,6 @@ import { TABLET_PANEL_OPTIONS, TabletSidebar } from './sidebar/tablet-sidebar';
         <core-tablet-sidebar class="h-full min-h-0 min-w-0 overflow-hidden" />
       </p-drawer>
     }
-    <p-toast position="bottom-center" />
   `,
 })
 export class FormlyBuilder {
