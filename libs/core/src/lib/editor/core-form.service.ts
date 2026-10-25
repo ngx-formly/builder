@@ -1,4 +1,4 @@
-import { computed, inject, Injectable, signal } from '@angular/core';
+import { computed, DestroyRef, inject, Injectable, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormlyFieldConfig } from '@ngx-formly/core';
 import { get, isEmpty, unset } from 'lodash-es';
@@ -26,7 +26,7 @@ import {
   WorkspaceHierarchy,
 } from '../model/types';
 import { CORE_EDITOR_CONFIG, FieldTypePreset } from '../config/types';
-import { CORE_FORM_STORE } from '../persistence/types';
+import { CORE_FORM_STORE, FormStoreRecoveryIssue } from '../persistence/types';
 import { CoreAddFieldOption } from './types';
 import { modifyPropertyTarget } from '../properties';
 import { PropertyChange } from '../properties/types';
@@ -50,6 +50,7 @@ import { PanelService } from './panel.service';
 
 @Injectable()
 export class CoreFormService {
+  private readonly destroyRef = inject(DestroyRef);
   protected readonly editorConfig = inject(CORE_EDITOR_CONFIG);
   protected libraryService = inject(CoreLibraryService);
   protected formStoreService = inject(CORE_FORM_STORE);
@@ -67,6 +68,9 @@ export class CoreFormService {
   readonly saveActiveFormTrigger$ = new Subject<void>();
   readonly saveStatusSrc = signal<'saved' | 'dirty' | 'saving' | 'error'>('saved');
   readonly saveStatus = this.saveStatusSrc.asReadonly();
+  protected readonly storageRecoveryIssuesSrc = signal<readonly FormStoreRecoveryIssue[]>([]);
+  readonly storageRecoveryIssues = this.storageRecoveryIssuesSrc.asReadonly();
+  readonly hasStorageRecoveryIssues = computed(() => this.storageRecoveryIssues().length > 0);
 
   protected readonly mouseInsideIds = signal<string[]>([]);
   readonly activeMouseInside = computed(() => {
@@ -126,6 +130,11 @@ export class CoreFormService {
 
     this.refreshHierarchy();
 
+    this.formStoreService
+      .getRecoveryIssues$?.(this.editorConfig.editorType)
+      .pipe(takeUntilDestroyed())
+      .subscribe((issues) => this.storageRecoveryIssuesSrc.set(issues));
+
     if (this.autosaveEnabled) {
       this.autosaveTrigger$
         .pipe(debounceTime(this.autosaveDelay), takeUntilDestroyed())
@@ -161,7 +170,7 @@ export class CoreFormService {
             }),
           );
         }),
-        takeUntilDestroyed(),
+        takeUntilDestroyed(this.destroyRef),
       )
       .subscribe({
         next: (formList) => {
@@ -189,6 +198,39 @@ export class CoreFormService {
         .getHierarchy$(this.editorConfig.editorType)
         .subscribe((hierarchy) => this.hierarchySrc.set(hierarchy));
     }
+  }
+
+  resetCorruptedStorage(): void {
+    const resetStorage = this.formStoreService.resetCorruptedStorage$;
+    if (!resetStorage) {
+      return;
+    }
+
+    resetStorage
+      .call(this.formStoreService, this.editorConfig.editorType)
+      .pipe(
+        switchMap(() => this.formStoreService.getFormList$(this.editorConfig.editorType)),
+        tap((formList) => {
+          this.formListSrc.set(formList);
+          this.activeFormSrc.set(null);
+          this.activeFieldIdSrc.set(null);
+        }),
+        switchMap(() => this.formStoreService.getHierarchy$(this.editorConfig.editorType)),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe((hierarchy) => this.hierarchySrc.set(hierarchy));
+  }
+
+  getStorageRecoveryBackup(): string {
+    return JSON.stringify(
+      {
+        exportedAt: new Date().toISOString(),
+        editorType: this.editorConfig.editorType,
+        entries: this.storageRecoveryIssues(),
+      },
+      null,
+      2,
+    );
   }
 
   setMouseEnteredField(fieldId: string): void {

@@ -1,7 +1,9 @@
 import { TestBed } from '@angular/core/testing';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { firstValueFrom } from 'rxjs';
+import { describe, expect, it } from 'vitest';
 import { WorkspaceHierarchy } from '../model/types';
 import { LocalFormStoreService } from './local-form-store.service';
+import { FormStoreRecoveryRequiredError } from './types';
 
 describe('LocalFormStoreService', () => {
   let service: LocalFormStoreService;
@@ -13,10 +15,6 @@ describe('LocalFormStoreService', () => {
       providers: [LocalFormStoreService],
     });
     service = TestBed.inject(LocalFormStoreService);
-  });
-
-  afterEach(() => {
-    vi.restoreAllMocks();
   });
 
   it('adds and retrieves a form', () => {
@@ -182,31 +180,72 @@ describe('LocalFormStoreService', () => {
     expect(localStorage.length).toBe(0);
   });
 
-  it('treats malformed form storage as empty', () => {
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+  it('reports malformed form storage without discarding it', async () => {
     localStorage.setItem(`formly-studio-forms-${editorId}`, '{invalid-json');
 
-    let list: unknown;
-    service.getFormList$(editorId).subscribe((forms) => (list = forms));
+    const list = await firstValueFrom(service.getFormList$(editorId));
+    const issues = await firstValueFrom(service.getRecoveryIssues$(editorId));
 
     expect(list).toEqual([]);
-    expect(consoleError).toHaveBeenCalledOnce();
+    expect(issues).toEqual([
+      expect.objectContaining({
+        editorType: editorId,
+        kind: 'forms',
+        reason: 'invalid-json',
+        rawValue: '{invalid-json',
+      }),
+    ]);
+    expect(localStorage.getItem(`formly-studio-forms-${editorId}`)).toBe('{invalid-json');
   });
 
   it.each(['null', '[]', '"invalid"', '42'])(
     'treats non-object form storage (%s) as empty',
-    (storedValue) => {
+    async (storedValue) => {
       localStorage.setItem(`formly-studio-forms-${editorId}`, storedValue);
 
-      let list: unknown;
-      service.getFormList$(editorId).subscribe((forms) => (list = forms));
+      const list = await firstValueFrom(service.getFormList$(editorId));
+      const issues = await firstValueFrom(service.getRecoveryIssues$(editorId));
 
       expect(list).toEqual([]);
+      expect(issues).toEqual([
+        expect.objectContaining({ kind: 'forms', reason: 'invalid-shape', rawValue: storedValue }),
+      ]);
     },
   );
 
-  it('replaces malformed form storage when a form is added', () => {
-    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+  it('rebuilds a fallback hierarchy without overwriting malformed hierarchy storage', async () => {
+    const form = {
+      id: 'preserved-form',
+      name: 'Preserved Form',
+      libraryId: 'form-material',
+      fields: [],
+      model: {},
+    };
+    localStorage.setItem(`formly-studio-forms-${editorId}`, JSON.stringify({ [form.id]: form }));
+    localStorage.setItem(`formly-studio-hierarchy-${editorId}`, '{invalid-json');
+
+    const hierarchy = await firstValueFrom(service.getHierarchy$(editorId));
+    const issues = await firstValueFrom(service.getRecoveryIssues$(editorId));
+
+    expect(hierarchy.rootNodeIds).toEqual(['preserved-form']);
+    expect(issues).toEqual([
+      expect.objectContaining({ kind: 'hierarchy', reason: 'invalid-json' }),
+    ]);
+    expect(localStorage.getItem(`formly-studio-hierarchy-${editorId}`)).toBe('{invalid-json');
+  });
+
+  it('reports a hierarchy with an invalid stored shape', async () => {
+    localStorage.setItem(`formly-studio-hierarchy-${editorId}`, JSON.stringify({ nodeMap: [] }));
+
+    await firstValueFrom(service.getHierarchy$(editorId));
+    const issues = await firstValueFrom(service.getRecoveryIssues$(editorId));
+
+    expect(issues).toEqual([
+      expect.objectContaining({ kind: 'hierarchy', reason: 'invalid-shape' }),
+    ]);
+  });
+
+  it('blocks writes until malformed storage is explicitly reset', async () => {
     localStorage.setItem(`formly-studio-forms-${editorId}`, '{invalid-json');
 
     const form = {
@@ -216,10 +255,44 @@ describe('LocalFormStoreService', () => {
       fields: [],
       model: {},
     };
-    service.addForm$(editorId, form).subscribe();
 
-    expect(JSON.parse(localStorage.getItem(`formly-studio-forms-${editorId}`)!)).toEqual({
-      'recovered-form': form,
+    await expect(firstValueFrom(service.addForm$(editorId, form))).rejects.toBeInstanceOf(
+      FormStoreRecoveryRequiredError,
+    );
+    expect(localStorage.getItem(`formly-studio-forms-${editorId}`)).toBe('{invalid-json');
+  });
+
+  it('resets only the affected editor namespace and allows recovery', async () => {
+    const otherEditorId = 'other-editor';
+    const otherForms = JSON.stringify({
+      other: {
+        id: 'other',
+        name: 'Other',
+        libraryId: 'form-material',
+        fields: [],
+        model: {},
+      },
     });
+    localStorage.setItem(`formly-studio-forms-${editorId}`, '{invalid-json');
+    localStorage.setItem(`formly-studio-hierarchy-${editorId}`, '{invalid-json');
+    localStorage.setItem(`formly-studio-forms-${otherEditorId}`, otherForms);
+    await firstValueFrom(service.getRecoveryIssues$(editorId));
+
+    await firstValueFrom(service.resetCorruptedStorage$(editorId));
+    await firstValueFrom(
+      service.addForm$(editorId, {
+        id: 'recovered-form',
+        name: 'Recovered Form',
+        libraryId: 'form-material',
+        fields: [],
+        model: {},
+      }),
+    );
+
+    expect(localStorage.getItem(`formly-studio-forms-${otherEditorId}`)).toBe(otherForms);
+    expect(JSON.parse(localStorage.getItem(`formly-studio-forms-${editorId}`)!)).toEqual({
+      'recovered-form': expect.objectContaining({ name: 'Recovered Form' }),
+    });
+    expect(await firstValueFrom(service.getRecoveryIssues$(editorId))).toEqual([]);
   });
 });

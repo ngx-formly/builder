@@ -20,5 +20,26 @@ export interface FormStoreService {
   getHierarchy$(editorType: string): Observable<WorkspaceHierarchy>;
   /** Save the full workspace hierarchy structure. */
   saveHierarchy$(editorType: string, hierarchy: WorkspaceHierarchy): Observable<void>;
+  /** Report local data that could not be read without discarding the original value. */
+  getRecoveryIssues$?(editorType: string): Observable<readonly FormStoreRecoveryIssue[]>;
+  /** Explicitly remove corrupted local data for an editor namespace. */
+  resetCorruptedStorage$?(editorType: string): Observable<void>;
+}
+
+export type FormStoreDataKind = 'forms' | 'hierarchy';
+
+export interface FormStoreRecoveryIssue {
+  editorType: string;
+  kind: FormStoreDataKind;
+  reason: 'invalid-json' | 'invalid-shape';
+  storageKey: string;
+  rawValue: string;
+}
+
+export class FormStoreRecoveryRequiredError extends Error {
+  constructor(readonly issues: readonly FormStoreRecoveryIssue[]) {
+    super('Corrupted local storage must be backed up or reset before it can be changed.');
+    this.name = 'FormStoreRecoveryRequiredError';
+  }
 }
 export const CORE_FORM_STORE = new InjectionToken<FormStoreService>('FormStoreService');
