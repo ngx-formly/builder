@@ -125,7 +125,20 @@ export class LocalFormStoreService implements FormStoreService {
 
   protected getFormMap(editorType: string): Record<string, DefaultForm> {
     const editorStorageKey = `${this.storageKey}-${editorType}`;
-    return JSON.parse(localStorage.getItem(editorStorageKey) || '{}');
+    const raw = localStorage.getItem(editorStorageKey);
+    if (!raw) {
+      return {};
+    }
+
+    try {
+      const formMap: unknown = JSON.parse(raw);
+      return typeof formMap === 'object' && formMap !== null && !Array.isArray(formMap)
+        ? (formMap as Record<string, DefaultForm>)
+        : {};
+    } catch (error) {
+      console.error('Error parsing forms from local storage', error);
+      return {};
+    }
   }
 
   protected storeFormMap(editorType: string, formMap: Record<string, DefaultForm>) {

@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { WorkspaceHierarchy } from '../model/types';
 import { LocalFormStoreService } from './local-form-store.service';
 
@@ -13,6 +13,10 @@ describe('LocalFormStoreService', () => {
       providers: [LocalFormStoreService],
     });
     service = TestBed.inject(LocalFormStoreService);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it('adds and retrieves a form', () => {
@@ -176,5 +180,46 @@ describe('LocalFormStoreService', () => {
     service.getFormList$('missing-editor').subscribe((forms) => (list = forms));
     expect(list).toEqual([]);
     expect(localStorage.length).toBe(0);
+  });
+
+  it('treats malformed form storage as empty', () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    localStorage.setItem(`formly-studio-forms-${editorId}`, '{invalid-json');
+
+    let list: unknown;
+    service.getFormList$(editorId).subscribe((forms) => (list = forms));
+
+    expect(list).toEqual([]);
+    expect(consoleError).toHaveBeenCalledOnce();
+  });
+
+  it.each(['null', '[]', '"invalid"', '42'])(
+    'treats non-object form storage (%s) as empty',
+    (storedValue) => {
+      localStorage.setItem(`formly-studio-forms-${editorId}`, storedValue);
+
+      let list: unknown;
+      service.getFormList$(editorId).subscribe((forms) => (list = forms));
+
+      expect(list).toEqual([]);
+    },
+  );
+
+  it('replaces malformed form storage when a form is added', () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    localStorage.setItem(`formly-studio-forms-${editorId}`, '{invalid-json');
+
+    const form = {
+      id: 'recovered-form',
+      name: 'Recovered Form',
+      libraryId: 'form-material',
+      fields: [],
+      model: {},
+    };
+    service.addForm$(editorId, form).subscribe();
+
+    expect(JSON.parse(localStorage.getItem(`formly-studio-forms-${editorId}`)!)).toEqual({
+      'recovered-form': form,
+    });
   });
 });
