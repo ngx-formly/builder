@@ -1,4 +1,4 @@
-import { computed, inject, Injectable, signal } from '@angular/core';
+import { computed, DestroyRef, inject, Injectable, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormlyFieldConfig } from '@ngx-formly/core';
 import { get, isEmpty, unset } from 'lodash-es';
@@ -26,7 +26,7 @@ import {
   WorkspaceHierarchy,
 } from '../model/types';
 import { CORE_EDITOR_CONFIG, FieldTypePreset } from '../config/types';
-import { CORE_FORM_STORE } from '../persistence/types';
+import { CORE_FORM_STORE, FormStoreRecoveryIssue } from '../persistence/types';
 import { CoreAddFieldOption } from './types';
 import { modifyPropertyTarget } from '../properties';
 import { PropertyChange } from '../properties/types';
@@ -50,6 +50,7 @@ import { PanelService } from './panel.service';
 
 @Injectable()
 export class CoreFormService {
+  private readonly destroyRef = inject(DestroyRef);
   protected readonly editorConfig = inject(CORE_EDITOR_CONFIG);
   protected libraryService = inject(CoreLibraryService);
   protected formStoreService = inject(CORE_FORM_STORE);
@@ -67,6 +68,12 @@ export class CoreFormService {
   readonly saveActiveFormTrigger$ = new Subject<void>();
   readonly saveStatusSrc = signal<'saved' | 'dirty' | 'saving' | 'error'>('saved');
   readonly saveStatus = this.saveStatusSrc.asReadonly();
+  protected readonly storageRecoveryIssuesSrc = signal<readonly FormStoreRecoveryIssue[]>([]);
+  readonly storageRecoveryIssues = this.storageRecoveryIssuesSrc.asReadonly();
+  readonly hasStorageRecoveryIssues = computed(() => this.storageRecoveryIssues().length > 0);
+  readonly hasFormStorageRecoveryIssue = computed(() =>
+    this.storageRecoveryIssues().some((issue) => issue.kind === 'forms'),
+  );
 
   protected readonly mouseInsideIds = signal<string[]>([]);
   readonly activeMouseInside = computed(() => {
@@ -126,6 +133,11 @@ export class CoreFormService {
 
     this.refreshHierarchy();
 
+    this.formStoreService
+      .getRecoveryIssues$?.(this.editorConfig.editorType)
+      .pipe(takeUntilDestroyed())
+      .subscribe((issues) => this.storageRecoveryIssuesSrc.set(issues));
+
     if (this.autosaveEnabled) {
       this.autosaveTrigger$
         .pipe(debounceTime(this.autosaveDelay), takeUntilDestroyed())
@@ -161,7 +173,7 @@ export class CoreFormService {
             }),
           );
         }),
-        takeUntilDestroyed(),
+        takeUntilDestroyed(this.destroyRef),
       )
       .subscribe({
         next: (formList) => {
@@ -189,6 +201,41 @@ export class CoreFormService {
         .getHierarchy$(this.editorConfig.editorType)
         .subscribe((hierarchy) => this.hierarchySrc.set(hierarchy));
     }
+  }
+
+  resetCorruptedStorage(): void {
+    const resetStorage = this.formStoreService.resetCorruptedStorage$;
+    if (!resetStorage) {
+      return;
+    }
+
+    resetStorage
+      .call(this.formStoreService, this.editorConfig.editorType)
+      .pipe(
+        switchMap(() => this.formStoreService.getFormList$(this.editorConfig.editorType)),
+        tap((formList) => {
+          this.formListSrc.set(formList);
+          if (!formList.some((form) => form.id === this.activeFormId())) {
+            this.setActiveForm(null);
+            this.saveStatusSrc.set('saved');
+          }
+        }),
+        switchMap(() => this.formStoreService.getHierarchy$(this.editorConfig.editorType)),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe((hierarchy) => this.hierarchySrc.set(hierarchy));
+  }
+
+  getStorageRecoveryBackup(): string {
+    return JSON.stringify(
+      {
+        exportedAt: new Date().toISOString(),
+        editorType: this.editorConfig.editorType,
+        entries: this.storageRecoveryIssues(),
+      },
+      null,
+      2,
+    );
   }
 
   setMouseEnteredField(fieldId: string): void {
@@ -229,15 +276,25 @@ export class CoreFormService {
   }
 
   setWorkspaceNodeName(nodeId: string, newName: string): void {
+    if (this.isStorageMutationBlocked()) return;
+
     const node = this.hierarchyNodeMap()[nodeId];
     if (!node) return;
 
-    const updated = renameNodeInHierarchy(this.hierarchy(), nodeId, newName);
+    const previousHierarchy = this.hierarchy();
+    const updated = renameNodeInHierarchy(previousHierarchy, nodeId, newName);
     this.hierarchySrc.set(updated);
 
     if (this.formStoreService.saveHierarchy$) {
-      this.formStoreService.saveHierarchy$(this.editorConfig.editorType, updated).subscribe();
+      this.formStoreService.saveHierarchy$(this.editorConfig.editorType, updated).subscribe({
+        error: (error) => {
+          this.hierarchySrc.set(previousHierarchy);
+          this.handlePersistenceError('rename workspace node', error);
+        },
+      });
     }
+
+    if (this.hasStorageRecoveryIssues()) return;
 
     if (node.type === 'form') {
       this.formStoreService.getForm$(this.editorConfig.editorType, nodeId).subscribe((rawForm) => {
@@ -246,14 +303,17 @@ export class CoreFormService {
         }
 
         rawForm.name = newName;
-        this.formStoreService.updateForm$(this.editorConfig.editorType, rawForm).subscribe(() => {
-          this.formStoreService
-            .getFormList$(this.editorConfig.editorType)
-            .subscribe((formList) => this.formListSrc.set(formList));
+        this.formStoreService.updateForm$(this.editorConfig.editorType, rawForm).subscribe({
+          next: () => {
+            this.formStoreService
+              .getFormList$(this.editorConfig.editorType)
+              .subscribe((formList) => this.formListSrc.set(formList));
 
-          if (this.activeFormId() === nodeId) {
-            this.setActiveFormName(newName);
-          }
+            if (this.activeFormId() === nodeId) {
+              this.setActiveFormName(newName);
+            }
+          },
+          error: (error) => this.handlePersistenceError('rename form', error),
         });
       });
     }
@@ -273,6 +333,11 @@ export class CoreFormService {
       return;
     }
 
+    if (this.hasFormStorageRecoveryIssue()) {
+      this.saveStatusSrc.set('error');
+      return;
+    }
+
     if (this.activeForm() && this.saveStatus() !== 'saved') {
       this.pendingFormId = formId;
       if (this.saveStatus() !== 'saving') {
@@ -283,7 +348,9 @@ export class CoreFormService {
 
     this.formStoreService.getForm$(this.editorConfig.editorType, formId).subscribe((rawForm) => {
       if (!rawForm) {
-        throw new Error(`Error loading form with id: ${formId}`);
+        this.saveStatusSrc.set('error');
+        console.error(`Error loading form with id: ${formId}`);
+        return;
       }
 
       if (!this.libraryService.getLibrary(rawForm.libraryId)) {
@@ -352,17 +419,24 @@ export class CoreFormService {
   }
 
   removeForm(formId: string) {
+    if (this.isStorageMutationBlocked()) return;
+
     this.formStoreService
       .removeForm$(this.editorConfig.editorType, formId)
       .pipe(switchMap(() => this.formStoreService.getFormList$(this.editorConfig.editorType)))
-      .subscribe((formList) => {
-        this.formListSrc.set(formList);
-        this.refreshHierarchy();
-        this.setActiveForm(null);
+      .subscribe({
+        next: (formList) => {
+          this.formListSrc.set(formList);
+          this.refreshHierarchy();
+          this.setActiveForm(null);
+        },
+        error: (error) => this.handlePersistenceError('remove form', error),
       });
   }
 
-  createFolder(name: string, parentId: string | null = null): string {
+  createFolder(name: string, parentId: string | null = null): string | undefined {
+    if (this.isStorageMutationBlocked()) return undefined;
+
     const folderId = `folder_${uuidv4().substring(0, 8)}`;
     const parentNode = parentId ? this.hierarchyNodeMap()[parentId] : null;
     const parentPath = parentNode ? parentNode.idPath : [];
@@ -377,15 +451,23 @@ export class CoreFormService {
       isExpanded: true,
     };
 
-    const updated = addNodeToHierarchy(this.hierarchy(), folderNode);
+    const previousHierarchy = this.hierarchy();
+    const updated = addNodeToHierarchy(previousHierarchy, folderNode);
     this.hierarchySrc.set(updated);
     if (this.formStoreService.saveHierarchy$) {
-      this.formStoreService.saveHierarchy$(this.editorConfig.editorType, updated).subscribe();
+      this.formStoreService.saveHierarchy$(this.editorConfig.editorType, updated).subscribe({
+        error: (error) => {
+          this.hierarchySrc.set(previousHierarchy);
+          this.handlePersistenceError('create folder', error);
+        },
+      });
     }
     return folderId;
   }
 
   deleteWorkspaceNode(nodeId: string): void {
+    if (this.isStorageMutationBlocked()) return;
+
     const node = this.hierarchyNodeMap()[nodeId];
     if (!node) return;
 
@@ -394,8 +476,9 @@ export class CoreFormService {
       return;
     }
 
+    const previousHierarchy = this.hierarchy();
     const { hierarchy: updatedHierarchy, removedNodeIds } = removeNodeFromHierarchy(
-      this.hierarchy(),
+      previousHierarchy,
       nodeId,
     );
     this.hierarchySrc.set(updatedHierarchy);
@@ -403,12 +486,21 @@ export class CoreFormService {
     if (this.formStoreService.saveHierarchy$) {
       this.formStoreService
         .saveHierarchy$(this.editorConfig.editorType, updatedHierarchy)
-        .subscribe();
+        .subscribe({
+          error: (error) => {
+            this.hierarchySrc.set(previousHierarchy);
+            this.handlePersistenceError('delete workspace node', error);
+          },
+        });
     }
+
+    if (this.hasStorageRecoveryIssues()) return;
 
     for (const removedId of removedNodeIds) {
       if (this.formList().some((f) => f.id === removedId)) {
-        this.formStoreService.removeForm$(this.editorConfig.editorType, removedId).subscribe();
+        this.formStoreService.removeForm$(this.editorConfig.editorType, removedId).subscribe({
+          error: (error) => this.handlePersistenceError('remove nested form', error),
+        });
       }
       if (this.activeFormId() === removedId) {
         this.setActiveForm(null);
@@ -421,12 +513,22 @@ export class CoreFormService {
   }
 
   moveWorkspaceNode(nodeId: string, targetFolderId: string | null, targetIndex?: number): void {
+    if (this.isStorageMutationBlocked()) return;
+
     try {
-      const updated = moveNodeInHierarchy(this.hierarchy(), nodeId, targetFolderId, targetIndex);
+      const previousHierarchy = this.hierarchy();
+      const updated = moveNodeInHierarchy(previousHierarchy, nodeId, targetFolderId, targetIndex);
       this.hierarchySrc.set(updated);
       if (this.formStoreService.saveHierarchy$) {
-        this.formStoreService.saveHierarchy$(this.editorConfig.editorType, updated).subscribe();
+        this.formStoreService.saveHierarchy$(this.editorConfig.editorType, updated).subscribe({
+          error: (error) => {
+            this.hierarchySrc.set(previousHierarchy);
+            this.handlePersistenceError('move workspace node', error);
+          },
+        });
       }
+
+      if (this.hasStorageRecoveryIssues()) return;
 
       const node = updated.nodeMap[nodeId];
       if (node && node.type === 'form') {
@@ -435,7 +537,9 @@ export class CoreFormService {
           .subscribe((rawForm) => {
             if (rawForm) {
               rawForm.parentId = targetFolderId;
-              this.formStoreService.updateForm$(this.editorConfig.editorType, rawForm).subscribe();
+              this.formStoreService.updateForm$(this.editorConfig.editorType, rawForm).subscribe({
+                error: (error) => this.handlePersistenceError('move form', error),
+              });
             }
           });
       }
@@ -449,11 +553,32 @@ export class CoreFormService {
   }
 
   toggleFolderExpansion(folderId: string, isExpanded?: boolean): void {
-    const updated = toggleFolderExpansion(this.hierarchy(), folderId, isExpanded);
+    if (this.isStorageMutationBlocked()) return;
+
+    const previousHierarchy = this.hierarchy();
+    const updated = toggleFolderExpansion(previousHierarchy, folderId, isExpanded);
     this.hierarchySrc.set(updated);
     if (this.formStoreService.saveHierarchy$) {
-      this.formStoreService.saveHierarchy$(this.editorConfig.editorType, updated).subscribe();
+      this.formStoreService.saveHierarchy$(this.editorConfig.editorType, updated).subscribe({
+        error: (error) => {
+          this.hierarchySrc.set(previousHierarchy);
+          this.handlePersistenceError('toggle folder', error);
+        },
+      });
     }
+  }
+
+  private isStorageMutationBlocked(): boolean {
+    if (!this.hasStorageRecoveryIssues()) {
+      return false;
+    }
+    this.saveStatusSrc.set('error');
+    return true;
+  }
+
+  private handlePersistenceError(action: string, error: unknown): void {
+    this.saveStatusSrc.set('error');
+    console.error(`Failed to ${action}`, error);
   }
 
   modifyActiveField(change: PropertyChange): void {

@@ -1,4 +1,5 @@
 import { CoreFormService } from '../../editor/core-form.service';
+import { DOCUMENT } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { ButtonDirective, ButtonIcon, ButtonLabel } from 'primeng/button';
 import { ButtonGroup } from 'primeng/buttongroup';
@@ -45,6 +46,7 @@ import { WorkspaceTreeItem } from './workspace-tree-item';
             aria-label="New folder"
             coreTooltip="New folder"
             tooltipPosition="top"
+            [disabled]="hasStorageRecoveryIssues()"
             (click)="addNewFolder()"
           >
             <i
@@ -60,6 +62,7 @@ import { WorkspaceTreeItem } from './workspace-tree-item';
             aria-label="Import Form"
             coreTooltip="Import Form"
             tooltipPosition="top"
+            [disabled]="hasStorageRecoveryIssues()"
             (click)="openImportDialog()"
           >
             <i
@@ -74,6 +77,7 @@ import { WorkspaceTreeItem } from './workspace-tree-item';
             aria-label="Create Form"
             coreTooltip="Create Form"
             tooltipPosition="top"
+            [disabled]="hasStorageRecoveryIssues()"
             (click)="addNewForm()"
           >
             <i
@@ -87,6 +91,36 @@ import { WorkspaceTreeItem } from './workspace-tree-item';
         </p-buttongroup>
       </span>
     </core-panel-header>
+
+    @if (hasStorageRecoveryIssues()) {
+      <div
+        role="alert"
+        class="m-4 rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950"
+      >
+        <strong>Saved workspace data could not be read.</strong>
+        <p class="mt-1">
+          Download a backup before resetting the affected local data. Other editor workspaces will
+          not be changed.
+        </p>
+        <div class="mt-3 flex flex-wrap gap-2">
+          <button
+            pButton
+            severity="secondary"
+            outlined
+            (click)="downloadRecoveryBackup()"
+          >
+            Download backup
+          </button>
+          <button
+            pButton
+            severity="danger"
+            (click)="resetCorruptedStorage()"
+          >
+            Reset local data
+          </button>
+        </div>
+      </div>
+    }
 
     @if (showFilter()) {
       <div class="flex min-h-0 flex-1 flex-col">
@@ -128,6 +162,7 @@ import { WorkspaceTreeItem } from './workspace-tree-item';
         <button
           pButton
           text
+          [disabled]="hasStorageRecoveryIssues()"
           (click)="addNewForm()"
         >
           <i class="material-symbols-outlined">assignment</i>
@@ -142,10 +177,12 @@ export class FormsPanel {
   protected mouseInsideService = inject(MouseInsideService);
   protected createFormDialogService = inject(CreateFormDialogService);
   private readonly importDialogService = inject(ImportDialogService);
+  private readonly document = inject(DOCUMENT);
 
   formList = this.formService.formList;
   hierarchyRootNodeIds = this.formService.hierarchyRootNodeIds;
   hierarchyNodeMap = this.formService.hierarchyNodeMap;
+  hasStorageRecoveryIssues = this.formService.hasStorageRecoveryIssues;
 
   readonly filterValue = signal('');
   readonly isFiltering = computed(() => !!this.filterValue().trim());
@@ -201,5 +238,25 @@ export class FormsPanel {
 
   clearFilter() {
     this.filterValue.set('');
+  }
+
+  downloadRecoveryBackup(): void {
+    const backup = this.formService.getStorageRecoveryBackup();
+    const editorType = this.formService.storageRecoveryIssues()[0]?.editorType ?? 'workspace';
+    const url = URL.createObjectURL(new Blob([backup], { type: 'application/json' }));
+    const link = this.document.createElement('a');
+    link.href = url;
+    link.download = `formly-storage-recovery-${editorType}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
+  resetCorruptedStorage(): void {
+    const confirmed = this.document.defaultView?.confirm(
+      'Reset the corrupted local data for this workspace? Download a backup first if you may need it.',
+    );
+    if (confirmed) {
+      this.formService.resetCorruptedStorage();
+    }
   }
 }

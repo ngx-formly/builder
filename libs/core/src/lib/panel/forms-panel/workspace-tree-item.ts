@@ -52,6 +52,7 @@ import { TreeItem } from '../../shared/tree-item';
                 aria-label="Options"
                 coreTooltip="Options"
                 tooltipPosition="top"
+                [disabled]="hasStorageRecoveryIssues()"
                 (click)="$event.preventDefault(); folderMenu.toggle($event)"
               >
                 <i
@@ -124,6 +125,7 @@ import { TreeItem } from '../../shared/tree-item';
             class="flex min-w-0 flex-col gap-0.5 rounded-sm text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
             [attr.aria-label]="'Open form ' + item.name"
             [attr.aria-pressed]="isActiveForm()"
+            [disabled]="hasFormStorageRecoveryIssue()"
           >
             <span class="flex items-center gap-1.5">
               <i class="material-symbols-outlined text-content-secondary"> description </i>
@@ -149,6 +151,7 @@ import { TreeItem } from '../../shared/tree-item';
               aria-label="Options"
               coreTooltip="Options"
               tooltipPosition="top"
+              [disabled]="hasStorageRecoveryIssues()"
               (click)="$event.preventDefault(); formMenu.toggle($event)"
             >
               <i
@@ -198,6 +201,8 @@ export class WorkspaceTreeItem {
   protected createFormDialogService = inject(CreateFormDialogService);
 
   isMouseInsideRoot = this.mouseInsideService.isMouseInside;
+  hasStorageRecoveryIssues = this.formService.hasStorageRecoveryIssues;
+  hasFormStorageRecoveryIssue = this.formService.hasFormStorageRecoveryIssue;
   linePaddingLeft = `calc(var(--spacing) * 3.75)`;
 
   folderMenuItems: MenuItem[] = [
