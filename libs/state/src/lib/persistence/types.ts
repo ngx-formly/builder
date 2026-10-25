@@ -34,6 +34,8 @@ export interface FormStoreRecoveryIssue {
   reason: 'invalid-json' | 'invalid-shape';
   storageKey: string;
   rawValue: string;
+  /** Additional stored values removed when this issue is reset, included in recovery backups. */
+  relatedEntries?: readonly { storageKey: string; rawValue: string }[];
 }
 
 export class FormStoreRecoveryRequiredError extends Error {

@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { ButtonDirective } from 'primeng/button';
 import { CreateFormDialogService } from '../panel/forms-panel/create-form-dialog.service';
 import { PanelService } from '../editor/panel.service';
+import { CoreFormService } from '../editor/core-form.service';
 import { Empty } from './empty';
 
 @Component({
@@ -24,6 +25,7 @@ import { Empty } from './empty';
         </button>
         <button
           pButton
+          [disabled]="formService.hasStorageRecoveryIssues()"
           (click)="addNewForm()"
         >
           <i class="material-symbols-outlined">add</i>
@@ -34,6 +36,7 @@ import { Empty } from './empty';
   `,
 })
 export class EmptyNoForm {
+  protected formService = inject(CoreFormService);
   protected panelService = inject(PanelService);
   protected createFormDialogService = inject(CreateFormDialogService);
 

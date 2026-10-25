@@ -150,3 +150,8 @@ import { createEmptyWorkspaceHierarchy, type FormStoreService } from '@formly-ed
 Custom stores may optionally implement `getRecoveryIssues$` and `resetCorruptedStorage$`. These
 hooks let the builder show its backup and reset workflow when persisted data cannot be read. Stores
 that manage recovery outside the builder can omit them.
+
+Recovery backups include each issue's original value and its optional `relatedEntries`, which hold
+any other stored values that reset will remove. The local store includes the workspace hierarchy
+when resetting corrupted forms also removes that hierarchy. Resetting only a corrupted hierarchy
+preserves the active form's unsaved edits.

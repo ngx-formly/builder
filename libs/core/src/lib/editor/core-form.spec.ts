@@ -216,6 +216,64 @@ describe('CoreFormService', () => {
       expect(service.activeModel()).toEqual({ foo: 'baz' });
     });
 
+    it('preserves unsaved edits and selection when resetting only the hierarchy', () => {
+      service.addForm$('Draft', [{ key: 'name' }], { name: 'Saved' }, mockConfig.id).subscribe();
+      const formId = service.activeFormId()!;
+      service.setActiveModel({ name: 'Unsaved' });
+      const activeForm = service.activeForm();
+      const activeFieldId = service.activeFieldId();
+      localStorage.setItem('formly-studio-hierarchy-form-editor', '{invalid-json');
+      const store = TestBed.inject(CORE_FORM_STORE);
+      store.getRecoveryIssues$!('form-editor').subscribe();
+
+      service.resetCorruptedStorage();
+
+      expect(service.hasStorageRecoveryIssues()).toBe(false);
+      expect(service.activeForm()).toBe(activeForm);
+      expect(service.activeFieldId()).toBe(activeFieldId);
+      expect(service.activeModel()).toEqual({ name: 'Unsaved' });
+      expect(service.saveStatus()).toBe('dirty');
+      expect(getStoredForm(formId).model).toEqual({ name: 'Saved' });
+      service.saveActiveForm();
+      expect(getStoredForm(formId).model).toEqual({ name: 'Unsaved' });
+      expect(service.saveStatus()).toBe('saved');
+    });
+
+    it('clears the active form and library when resetting corrupt forms', () => {
+      service.addForm$('Draft', [{ key: 'name' }], {}, mockConfig.id).subscribe();
+      localStorage.setItem('formly-studio-forms-form-editor', '{invalid-json');
+      TestBed.inject(CORE_FORM_STORE).getRecoveryIssues$!('form-editor').subscribe();
+
+      service.resetCorruptedStorage();
+
+      expect(service.activeForm()).toBeNull();
+      expect(service.activeFieldId()).toBeNull();
+      expect(TestBed.inject(CoreLibraryService).activeLibraryId()).toBeNull();
+      expect(service.formList()).toEqual([]);
+      expect(service.saveStatus()).toBe('saved');
+    });
+
+    it('backs up the healthy hierarchy that resetting corrupt forms also removes', () => {
+      service.createFolder('Preserved folder');
+      const hierarchyKey = 'formly-studio-hierarchy-form-editor';
+      const originalHierarchy = localStorage.getItem(hierarchyKey);
+      localStorage.setItem('formly-studio-forms-form-editor', '{invalid-json');
+      TestBed.inject(CORE_FORM_STORE).getRecoveryIssues$!('form-editor').subscribe();
+
+      const backup = JSON.parse(service.getStorageRecoveryBackup());
+      service.resetCorruptedStorage();
+
+      expect(backup.entries).toEqual([
+        expect.objectContaining({
+          kind: 'forms',
+          rawValue: '{invalid-json',
+          relatedEntries: [{ storageKey: hierarchyKey, rawValue: originalHierarchy }],
+        }),
+      ]);
+      expect(service.hierarchyRootNodeIds()).toEqual([]);
+      expect(localStorage.getItem(hierarchyKey)).not.toBe(originalHierarchy);
+    });
+
     it('autosaves the active form after the default delay when enabled', () => {
       vi.useFakeTimers();
       getTestBed().resetTestingModule();

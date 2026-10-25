@@ -2,12 +2,13 @@ import { NO_ERRORS_SCHEMA, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { NgForm } from '@angular/forms';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
-import { of } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { CoreFormService } from '../../editor/core-form.service';
 import { CoreLibraryService } from '../../config/core-library.service';
 import { CreateFormDialogService } from './create-form-dialog.service';
 import { CreateFormDialog } from './create-form-dialog';
+import { FormStoreRecoveryRequiredError } from '../../persistence/types';
 
 function getForm(component: CreateFormDialog): NgForm {
   return (component as unknown as { form: () => NgForm }).form();
@@ -18,6 +19,7 @@ describe('CreateFormDialog', () => {
   let addForm$: ReturnType<typeof vi.fn>;
   let isOpen: ReturnType<typeof signal<boolean>>;
   let parentId: ReturnType<typeof signal<string | null>>;
+  let hasStorageRecoveryIssues: ReturnType<typeof signal<boolean>>;
 
   const templateA = {
     name: 'Material Showcase',
@@ -79,6 +81,7 @@ describe('CreateFormDialog', () => {
     addForm$ = vi.fn(() => of(undefined));
     isOpen = signal(false);
     parentId = signal(null);
+    hasStorageRecoveryIssues = signal(false);
 
     TestBed.resetTestingModule();
     TestBed.overrideComponent(CreateFormDialog, {
@@ -95,6 +98,7 @@ describe('CreateFormDialog', () => {
           provide: CoreFormService,
           useValue: {
             addForm$,
+            hasStorageRecoveryIssues,
           },
         },
         {
@@ -122,7 +126,7 @@ describe('CreateFormDialog', () => {
     }).compileComponents();
 
     fixture = TestBed.createComponent(CreateFormDialog);
-    fixture.detectChanges();
+    fixture.autoDetectChanges();
   });
 
   it('resets to blank template and default name when opened', () => {
@@ -168,6 +172,71 @@ describe('CreateFormDialog', () => {
     fixture.componentInstance.createForm();
 
     expect(addForm$).toHaveBeenCalledWith('Blankie', [], {}, 'form-material', true, 'folder-1');
+  });
+
+  it('disables creation and explains recovery when corruption is detected in an open dialog', async () => {
+    openDialog();
+    hasStorageRecoveryIssues.set(true);
+    await fixture.whenStable();
+
+    const createButton = fixture.nativeElement.querySelector(
+      '.p-dialog-footer button',
+    ) as HTMLButtonElement;
+    expect(createButton.disabled).toBe(true);
+    expect(fixture.nativeElement.textContent).toContain(
+      'Recover saved data in the Workspace panel',
+    );
+    fixture.componentInstance.createForm();
+    expect(addForm$).not.toHaveBeenCalled();
+  });
+
+  it('keeps the entered form and shows a recovery error when a write discovers corruption', async () => {
+    openDialog();
+    setName('My draft');
+    addForm$.mockReturnValue(throwError(() => new FormStoreRecoveryRequiredError([])));
+
+    fixture.componentInstance.createForm();
+    await fixture.whenStable();
+
+    expect(TestBed.inject(CreateFormDialogService).close).not.toHaveBeenCalled();
+    expect(fixture.componentInstance.formName()).toBe('My draft');
+    expect(fixture.nativeElement.textContent).toContain(
+      'Recover saved data in the Workspace panel',
+    );
+  });
+
+  it('handles a synchronous storage failure and allows retrying', async () => {
+    openDialog();
+    addForm$.mockImplementationOnce(() => {
+      throw new Error('private storage failure');
+    });
+
+    fixture.componentInstance.createForm();
+    await fixture.whenStable();
+
+    expect(TestBed.inject(CreateFormDialogService).close).not.toHaveBeenCalled();
+    expect(fixture.nativeElement.textContent).toContain(
+      'Could not create the form. Please try again.',
+    );
+    expect(fixture.nativeElement.textContent).not.toContain('private storage failure');
+
+    fixture.componentInstance.createForm();
+    expect(TestBed.inject(CreateFormDialogService).close).toHaveBeenCalledOnce();
+  });
+
+  it('closes only after the form has been stored', () => {
+    openDialog();
+    const saved = new Subject<void>();
+    addForm$.mockReturnValue(saved);
+
+    fixture.componentInstance.createForm();
+
+    expect(TestBed.inject(CreateFormDialogService).close).not.toHaveBeenCalled();
+    fixture.componentInstance.createForm();
+    expect(addForm$).toHaveBeenCalledOnce();
+    saved.next();
+    saved.complete();
+    expect(TestBed.inject(CreateFormDialogService).close).toHaveBeenCalledOnce();
   });
 
   it('creates a blank form with the selected Ng Zorro library', () => {

@@ -249,6 +249,13 @@ export class LocalFormStoreService implements FormStoreService {
           ? `${this.storageKey}-${editorType}`
           : `${this.hierarchyStorageKey}-${editorType}`,
     };
+    if (kind === 'forms') {
+      const storageKey = `${this.hierarchyStorageKey}-${editorType}`;
+      const rawValue = localStorage.getItem(storageKey);
+      if (rawValue !== null) {
+        issue.relatedEntries = [{ storageKey, rawValue }];
+      }
+    }
     subject.next([...subject.value.filter((value) => value.kind !== kind), issue]);
   }
 

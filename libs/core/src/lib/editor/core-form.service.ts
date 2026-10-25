@@ -215,8 +215,10 @@ export class CoreFormService {
         switchMap(() => this.formStoreService.getFormList$(this.editorConfig.editorType)),
         tap((formList) => {
           this.formListSrc.set(formList);
-          this.activeFormSrc.set(null);
-          this.activeFieldIdSrc.set(null);
+          if (!formList.some((form) => form.id === this.activeFormId())) {
+            this.setActiveForm(null);
+            this.saveStatusSrc.set('saved');
+          }
         }),
         switchMap(() => this.formStoreService.getHierarchy$(this.editorConfig.editorType)),
         takeUntilDestroyed(this.destroyRef),
