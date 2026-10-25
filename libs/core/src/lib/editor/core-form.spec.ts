@@ -133,6 +133,7 @@ describe('CoreFormService', () => {
 
     it('manages folders and moves nodes within workspace hierarchy', () => {
       const folderId = service.createFolder('Marketing');
+      if (!folderId) throw new Error('Expected folder creation to succeed');
       expect(service.hierarchyRootNodeIds()).toContain(folderId);
       expect(service.hierarchyNodeMap()[folderId].name).toBe('Marketing');
 
@@ -155,6 +156,57 @@ describe('CoreFormService', () => {
       service.deleteWorkspaceNode(folderId);
       expect(service.hierarchyRootNodeIds()).not.toContain(folderId);
       expect(service.hierarchyNodeMap()[folderId]).toBeUndefined();
+    });
+
+    it('blocks tree actions while form storage requires recovery', () => {
+      const folderId = service.createFolder('Marketing');
+      if (!folderId) throw new Error('Expected folder creation to succeed');
+      service.addForm$('Landing Page', [], {}, mockConfig.id).subscribe();
+      const formId = service.activeFormId()!;
+      service.setActiveForm(null);
+
+      localStorage.setItem('formly-studio-forms-form-editor', '{invalid-json');
+      const store = TestBed.inject(CORE_FORM_STORE) as LocalFormStoreService;
+      store.getFormList$('form-editor').subscribe();
+      const hierarchyBeforeActions = service.hierarchy();
+
+      expect(service.hasStorageRecoveryIssues()).toBe(true);
+      expect(() => {
+        service.setWorkspaceNodeName(folderId, 'Renamed');
+        service.createFolder('Blocked folder');
+        service.moveWorkspaceNode(formId, folderId);
+        service.toggleFolderExpansion(folderId);
+        service.deleteWorkspaceNode(folderId);
+        service.setActiveForm(formId);
+      }).not.toThrow();
+      expect(service.hierarchy()).toBe(hierarchyBeforeActions);
+      expect(service.activeForm()).toBeNull();
+      expect(service.saveStatus()).toBe('error');
+      expect(localStorage.getItem('formly-studio-forms-form-editor')).toBe('{invalid-json');
+    });
+
+    it('rolls back an optimistic tree change when corruption is detected during the write', () => {
+      vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      const folderId = service.createFolder('Marketing');
+      if (!folderId) throw new Error('Expected folder creation to succeed');
+      localStorage.setItem('formly-studio-hierarchy-form-editor', '{invalid-json');
+
+      service.renameWorkspaceNode(folderId, 'Renamed');
+
+      expect(service.hasStorageRecoveryIssues()).toBe(true);
+      expect(service.hierarchyNodeMap()[folderId].name).toBe('Marketing');
+      expect(service.saveStatus()).toBe('error');
+      expect(localStorage.getItem('formly-studio-hierarchy-form-editor')).toBe('{invalid-json');
+    });
+
+    it('handles a missing stored form without throwing', () => {
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+      expect(() => service.setActiveForm('missing-form')).not.toThrow();
+
+      expect(service.activeForm()).toBeNull();
+      expect(service.saveStatus()).toBe('error');
+      expect(consoleError).toHaveBeenCalledWith('Error loading form with id: missing-form');
     });
 
     it('updates active form model', () => {

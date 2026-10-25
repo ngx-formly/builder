@@ -13,7 +13,7 @@ export interface FormStoreService {
   /** Remove a form by id. */
   removeForm$(editorType: string, formId: string): Observable<void>;
   /** Retrieve a stored form by id. */
-  getForm$(editorType: string, formId: string): Observable<DefaultForm>;
+  getForm$(editorType: string, formId: string): Observable<DefaultForm | undefined>;
   /** List available forms for an editor. */
   getFormList$(editorType: string): Observable<BaseEditorForm[]>;
   /** Retrieve the full workspace hierarchy structure. */

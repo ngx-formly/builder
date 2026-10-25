@@ -24,6 +24,8 @@ describe('WorkspaceTreeItem', () => {
 
   const activeFormId = signal<string | null>(null);
   const activeForm = signal<{ libraryId?: string } | null>(null);
+  const hasStorageRecoveryIssues = signal(false);
+  const hasFormStorageRecoveryIssue = signal(false);
   const hierarchy = signal<WorkspaceHierarchy>(createEmptyWorkspaceHierarchy('test-ws'));
 
   beforeEach(async () => {
@@ -34,6 +36,8 @@ describe('WorkspaceTreeItem', () => {
     openCreateFormDialog = vi.fn();
     activeFormId.set(null);
     activeForm.set({ libraryId: 'form-material' });
+    hasStorageRecoveryIssues.set(false);
+    hasFormStorageRecoveryIssue.set(false);
 
     const folderWithChildren: WorkspaceFolderNode = {
       id: 'folder-1',
@@ -105,6 +109,8 @@ describe('WorkspaceTreeItem', () => {
           useValue: {
             activeFormId,
             activeForm,
+            hasStorageRecoveryIssues,
+            hasFormStorageRecoveryIssue,
             hierarchyNodeMap: () => hierarchy().nodeMap,
             setActiveForm,
             toggleFolderExpansion,
@@ -245,6 +251,25 @@ describe('WorkspaceTreeItem', () => {
       expect(fixture.nativeElement.textContent).toContain('Child Form');
       expect(fixture.nativeElement.textContent).toContain('2 Fields');
       expect(fixture.nativeElement.textContent).toContain('Material');
+    });
+
+    it('disables form selection and tree actions while storage requires recovery', async () => {
+      fixture = TestBed.createComponent(WorkspaceTreeItem);
+      fixture.componentRef.setInput('nodeId', 'form-child');
+      await fixture.whenStable();
+
+      hasStorageRecoveryIssues.set(true);
+      hasFormStorageRecoveryIssue.set(true);
+      await fixture.whenStable();
+
+      const openButton: HTMLButtonElement = fixture.nativeElement.querySelector(
+        'button[aria-label="Open form Child Form"]',
+      );
+      const optionsButton: HTMLButtonElement = fixture.nativeElement.querySelector(
+        'button[aria-label="Options"]',
+      );
+      expect(openButton.disabled).toBe(true);
+      expect(optionsButton.disabled).toBe(true);
     });
 
     it('selects form when clicked', () => {

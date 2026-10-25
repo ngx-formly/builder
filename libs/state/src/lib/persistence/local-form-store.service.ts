@@ -112,7 +112,7 @@ export class LocalFormStoreService implements FormStoreService {
     );
   }
 
-  getForm$(editorType: string, formId: string): Observable<DefaultForm> {
+  getForm$(editorType: string, formId: string): Observable<DefaultForm | undefined> {
     return of(this.getFormMap(editorType)[formId]);
   }
 
