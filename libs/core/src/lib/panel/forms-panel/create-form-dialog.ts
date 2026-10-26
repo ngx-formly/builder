@@ -3,6 +3,7 @@ import { FormlyFieldConfig } from '@ngx-formly/core';
 import {
   ChangeDetectionStrategy,
   Component,
+  computed,
   effect,
   inject,
   signal,
@@ -16,10 +17,14 @@ import { InputText } from 'primeng/inputtext';
 import { Message } from 'primeng/message';
 import { RadioButton } from 'primeng/radiobutton';
 import { Select } from 'primeng/select';
+import { defer, finalize } from 'rxjs';
 import { CoreLibraryService } from '../../config/core-library.service';
+import { FormStoreRecoveryRequiredError } from '../../persistence/types';
 import { CreateFormDialogService } from './create-form-dialog.service';
 
 const BLANK_TEMPLATE_ID = 'blank';
+const STORAGE_RECOVERY_MESSAGE =
+  'Recover saved data in the Workspace panel before creating a form.';
 
 interface FormTemplate {
   id: string;
@@ -65,6 +70,9 @@ interface FormTemplate {
         #form="ngForm"
         class="flex h-full min-h-0 flex-col"
       >
+        @if (errorMessage()) {
+          <p-message severity="error">{{ errorMessage() }}</p-message>
+        }
         <div class="grid w-full shrink-0 grid-cols-1 items-start gap-4 py-2 sm:grid-cols-2">
           <div class="min-w-0">
             <p-floatlabel variant="on">
@@ -166,7 +174,7 @@ interface FormTemplate {
       <ng-template #footer>
         <button
           pButton
-          [disabled]="!form.valid"
+          [disabled]="!form.valid || isCreating() || formService.hasStorageRecoveryIssues()"
           (click)="createForm()"
         >
           <span pButtonLabel>Create Form</span>
@@ -196,6 +204,11 @@ export class CreateFormDialog {
   readonly formName = signal('New Form');
   readonly selectedTemplateId = signal(BLANK_TEMPLATE_ID);
   readonly selectedLibrary = signal(this.libraryOptions[0]?.id);
+  protected readonly isCreating = signal(false);
+  private readonly creationError = signal('');
+  protected readonly errorMessage = computed(() =>
+    this.formService.hasStorageRecoveryIssues() ? STORAGE_RECOVERY_MESSAGE : this.creationError(),
+  );
 
   dialogPT: DialogPassThrough = {
     root: {
@@ -242,6 +255,7 @@ export class CreateFormDialog {
   }
 
   protected reset(): void {
+    this.creationError.set('');
     this.formName.set('New Form');
     this.selectedTemplateId.set(BLANK_TEMPLATE_ID);
     this.selectedLibrary.set(this.libraryOptions[0]?.id);
@@ -258,6 +272,10 @@ export class CreateFormDialog {
   }
 
   createForm(): void {
+    if (this.isCreating() || this.formService.hasStorageRecoveryIssues()) {
+      return;
+    }
+
     const selectedTemplateId = this.selectedTemplateId();
     const template = this.templates.find((t) => t.id === selectedTemplateId);
     if (!template) {
@@ -271,18 +289,28 @@ export class CreateFormDialog {
       return;
     }
 
-    this.formService
-      .addForm$(
+    this.creationError.set('');
+    this.isCreating.set(true);
+    defer(() =>
+      this.formService.addForm$(
         this.formName().trim(),
         template.fields,
         template.model,
         libraryId,
         true,
         this.dialogService.parentId(),
-      )
-      .subscribe();
-
-    this.dialogService.close();
+      ),
+    )
+      .pipe(finalize(() => this.isCreating.set(false)))
+      .subscribe({
+        next: () => this.dialogService.close(),
+        error: (error) =>
+          this.creationError.set(
+            error instanceof FormStoreRecoveryRequiredError
+              ? STORAGE_RECOVERY_MESSAGE
+              : 'Could not create the form. Please try again.',
+          ),
+      });
   }
 
   close(): void {

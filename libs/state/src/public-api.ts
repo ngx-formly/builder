@@ -27,4 +27,10 @@ export {
 } from './lib/model/workspace-hierarchy.utils';
 
 export { LocalFormStoreService } from './lib/persistence/local-form-store.service';
-export { CORE_FORM_STORE, type FormStoreService } from './lib/persistence/types';
+export {
+  CORE_FORM_STORE,
+  FormStoreRecoveryRequiredError,
+  type FormStoreDataKind,
+  type FormStoreRecoveryIssue,
+  type FormStoreService,
+} from './lib/persistence/types';

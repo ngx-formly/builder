@@ -1,5 +1,5 @@
 import { CoreFormService } from '../../editor/core-form.service';
-import { NO_ERRORS_SCHEMA, signal } from '@angular/core';
+import { computed, NO_ERRORS_SCHEMA, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ButtonDirective, ButtonIcon, ButtonLabel } from 'primeng/button';
 import { ButtonGroup } from 'primeng/buttongroup';
@@ -9,6 +9,7 @@ import { CreateFormDialogService } from './create-form-dialog.service';
 import { ImportDialogService } from './import-dialog.service';
 import { MouseInsideService } from '../../editor/mouse-inside.service';
 import type { BaseEditorForm, WorkspaceNode } from '../../model/types';
+import type { FormStoreRecoveryIssue } from '../../persistence/types';
 import { Tooltip } from '../../shared';
 import { Filter } from '../../shared/filter';
 import { FormsPanel } from './forms-panel';
@@ -21,12 +22,17 @@ describe('FormsPanel', () => {
   const formList = signal<BaseEditorForm[]>([]);
   const hierarchyRootNodeIds = signal<string[]>([]);
   const hierarchyNodeMap = signal<Record<string, WorkspaceNode>>({});
+  const storageRecoveryIssues = signal<readonly FormStoreRecoveryIssue[]>([]);
+  const hasStorageRecoveryIssues = computed(() => storageRecoveryIssues().length > 0);
+  let resetCorruptedStorage: ReturnType<typeof vi.fn>;
 
   beforeEach(async () => {
     formList.set([]);
     hierarchyRootNodeIds.set([]);
     hierarchyNodeMap.set({});
+    storageRecoveryIssues.set([]);
     createFolder = vi.fn();
+    resetCorruptedStorage = vi.fn();
     openCreateFormDialog = vi.fn();
     openImportDialog = vi.fn();
 
@@ -64,6 +70,10 @@ describe('FormsPanel', () => {
             hierarchyRootNodeIds,
             hierarchyNodeMap,
             createFolder,
+            storageRecoveryIssues,
+            hasStorageRecoveryIssues,
+            getStorageRecoveryBackup: () => '{}',
+            resetCorruptedStorage,
           },
         },
       ],
@@ -172,5 +182,32 @@ describe('FormsPanel', () => {
     buttons[1].click();
 
     expect(openImportDialog).toHaveBeenCalledWith();
+  });
+
+  it('offers backup and explicit reset actions for corrupted storage', async () => {
+    storageRecoveryIssues.set([
+      {
+        editorType: 'test-editor',
+        kind: 'forms',
+        reason: 'invalid-json',
+        storageKey: 'formly-studio-forms-test-editor',
+        rawValue: '{',
+      },
+    ]);
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const alert = fixture.nativeElement.querySelector('[role="alert"]');
+    const buttons = Array.from(alert.querySelectorAll('button')) as HTMLButtonElement[];
+    expect(alert.textContent).toContain('Saved workspace data could not be read.');
+    expect(buttons.map((button) => button.textContent?.trim())).toEqual([
+      'Download backup',
+      'Reset local data',
+    ]);
+
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    buttons[1].click();
+
+    expect(resetCorruptedStorage).toHaveBeenCalledOnce();
   });
 });
