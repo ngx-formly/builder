@@ -6,7 +6,7 @@ import {
 import { provideNativeDateAdapter } from '@angular/material/core';
 import { MAT_ICON_DEFAULT_OPTIONS } from '@angular/material/icon';
 import { provideRouter } from '@angular/router';
-import { primengPreset, provideCoreTheme } from '@formly-editor/core';
+import { primengPreset, provideCoreTheme } from '@ngx-formly/builder';
 import { definePreset } from '@primeuix/themes';
 import Aura from '@primeuix/themes/aura';
 import { provideNzDateFnsAdapter } from 'ng-zorro-antd/core/time';

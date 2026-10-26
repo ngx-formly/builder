@@ -7,7 +7,7 @@
     "declaration": true,
     "declarationMap": true,
     "paths": {
-      "@formly-editor/state": ["../../dist/state"]
+      "@ngx-formly/builder-state": ["../../dist/state"]
     },
     "types": []
   },

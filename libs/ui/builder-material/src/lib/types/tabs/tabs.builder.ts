@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, inject, OnInit, signal } from '@angular/core';
-import { BuilderFieldStateService } from '@formly-editor/core';
-import { TabsContent, TabsProps } from '@formly-editor/material';
+import { BuilderFieldStateService } from '@ngx-formly/builder';
+import { TabsContent, TabsProps } from '@ngx-formly/builder-material-fields';
 import { FieldGroupTypeConfig, FieldType } from '@ngx-formly/core';
 
 interface State {

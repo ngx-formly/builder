@@ -9,7 +9,7 @@ import {
   createSelectProperty,
   FieldTypeOption,
   FieldWrapperOption,
-} from '@formly-editor/core';
+} from '@ngx-formly/builder';
 
 export const labelProp = createInputProperty({
   label: 'Label',

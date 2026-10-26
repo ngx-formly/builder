@@ -65,7 +65,7 @@ try {
     [
       "import { existsSync } from 'node:fs';",
       "import { fileURLToPath } from 'node:url';",
-      "for (const name of ['@formly-editor/state', '@formly-editor/core', '@formly-editor/core/styles.css', '@formly-editor/material', '@formly-editor/builder-material']) {",
+      "for (const name of ['@ngx-formly/builder-state', '@ngx-formly/builder', '@ngx-formly/builder/styles.css', '@ngx-formly/builder-material-fields', '@ngx-formly/builder-material']) {",
       '  const entryPoint = fileURLToPath(import.meta.resolve(name));',
       '  if (!existsSync(entryPoint)) throw new Error(`Missing package entry point: ${name}`);',
       '}',

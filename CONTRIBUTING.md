@@ -8,8 +8,10 @@ Use an issue or discussion for changes that affect the document format, public A
 boundaries, extension contracts, or user workflows. Small fixes and test improvements can go
 directly to a pull request.
 
-Public package names are still provisional. Avoid introducing new imports from application code
-into a library or exporting an internal service without discussing the compatibility cost.
+The public builder package is `@ngx-formly/builder`, built from `libs/core`. State and UI packages
+use `@ngx-formly/builder-*`; see the [package map](README.md#package-names).
+Avoid introducing new imports from application code into a library or exporting an internal
+service without discussing the compatibility cost.
 
 ## Local setup
 
@@ -51,7 +53,7 @@ tests.
 ## Architecture rules
 
 - Keep the Studio application dependent on libraries, not the reverse.
-- Keep `@formly-editor/state` headless: it must not depend on Angular CDK, UI frameworks, or the
+- Keep `@ngx-formly/builder-state` headless: it must not depend on Angular CDK, UI frameworks, or the
   editor shell.
 - Keep reusable Material runtime fields independent from editor state.
 - Put editor-only Material adapters in `builder-material`.

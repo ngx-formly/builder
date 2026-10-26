@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { Router } from '@angular/router';
-import { CreateFormDialogService, ImportDialogService } from '@formly-editor/core';
+import { CreateFormDialogService, ImportDialogService } from '@ngx-formly/builder';
 import { ActionButton } from './action-button';
 
 @Component({

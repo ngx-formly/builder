@@ -24,7 +24,10 @@ Material adds custom types such as postal code, cards, and repeating sections.
 - **Render an existing export:** [Use an exported form](/developers/use-an-exported-form/).
 
 These guides target Angular 22 and Formly 11.x. Editor libraries are not published npm packages yet.
-The repository verifies its prerelease embedding contract through a package-consumer fixture;
-package names and public APIs remain provisional until the first public prerelease.
+The repository verifies its prerelease embedding contract through a package-consumer fixture.
+The editor shell in `libs/core` uses `@ngx-formly/builder`. Headless state uses
+`@ngx-formly/builder-state`, reusable Material fields use `@ngx-formly/builder-material-fields`,
+and editor-only Material adapters use `@ngx-formly/builder-material`. Public APIs remain
+provisional until the first public prerelease.
 
 For component authoring and runtime APIs, use the [ngx-formly documentation](https://formly.dev/).

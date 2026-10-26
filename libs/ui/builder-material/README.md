@@ -14,19 +14,18 @@ navigation, or accessibility behavior.
 
 The dependency direction is one-way:
 
-- `builder-material` depends on `@formly-editor/core` and `@formly-editor/material`.
+- `builder-material` depends on `@ngx-formly/builder` and `@ngx-formly/builder-material-fields`.
 - Material does not depend on core or builder-material.
 - Core does not depend on either UI library.
 
-This is a prerelease package boundary. The temporary `@formly-editor` name is not the final public
-npm name and its API remains unstable until the first public prerelease.
+This is a prerelease package boundary. Its API remains unstable until the first public prerelease.
 
 ## Registration
 
 Import `withStepperTypeBuilder()` and `withTabsTypeBuilder()` from
-`@formly-editor/builder-material` and place them in a core library configuration's
+`@ngx-formly/builder-material` and place them in a core library configuration's
 `builderConfigOptions`. Keep the regular `withStepperType()` and `withTabsType()`
-registrations from `@formly-editor/material` in `configOptions`, together with the
+registrations from `@ngx-formly/builder-material-fields` in `configOptions`, together with the
 `step` and `tab` child types.
 
 Core uses these separate configurations to render builder adapters only in the

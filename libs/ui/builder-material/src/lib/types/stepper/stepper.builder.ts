@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, inject, OnInit, signal } from '@angular/core';
-import { BuilderFieldStateService } from '@formly-editor/core';
-import { StepperContent, StepperProps } from '@formly-editor/material';
+import { BuilderFieldStateService } from '@ngx-formly/builder';
+import { StepperContent, StepperProps } from '@ngx-formly/builder-material-fields';
 import { FieldGroupTypeConfig, FieldType } from '@ngx-formly/core';
 
 interface State {

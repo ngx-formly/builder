@@ -23,10 +23,10 @@ library workspaces define provisional publishable package contracts:
 - `libs/ui/material`: Reusable Material runtime fields and Formly integrations.
 - `libs/ui/builder-material`: Editor-only adapters for Material composite fields.
 
-Import across libraries through their provisional `@formly-editor/*` public entry points. Keep
-entry points limited to supported consumer APIs; do not export implementation details. State must
-not depend on UI frameworks or the editor shell. Core must not depend on UI integrations or
-application code.
+Import the editor shell through `@ngx-formly/builder` and companion libraries through their
+`@ngx-formly/builder-*` public entry points. Keep entry points limited to supported consumer
+APIs; do not export implementation details. State must not depend on UI frameworks or the editor
+shell. Core must not depend on UI integrations or application code.
 
 - Keep hierarchical editor state normalized using `nodeMap`, `rootNodeIds`, and existing adjacency metadata such as `parentId`, `childIds`, and `idPath`. Use pure immutable updates, indexed lookups, and existing path-recalculation utilities instead of mutating nested trees.
 - When deleting fields, folders, or forms, clean parent references, root lists, and selection state without leaving orphan nodes.

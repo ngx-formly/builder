@@ -1,4 +1,4 @@
-import { createLibrary } from '@formly-editor/core';
+import { createLibrary } from '@ngx-formly/builder';
 import {
   studioMaterialBuilderConfigOptions,
   studioMaterialConfigOptions,

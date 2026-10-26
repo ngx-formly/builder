@@ -1,6 +1,6 @@
 import { DOCUMENT, isPlatformBrowser } from '@angular/common';
 import { inject, Injectable, PLATFORM_ID, RendererFactory2, signal } from '@angular/core';
-import { CORE_THEME } from '@formly-editor/core';
+import { CORE_THEME } from '@ngx-formly/builder';
 
 export type Theme = 'light' | 'dark';
 

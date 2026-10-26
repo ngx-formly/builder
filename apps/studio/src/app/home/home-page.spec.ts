@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
-import { CreateFormDialogService, ImportDialogService } from '@formly-editor/core';
+import { CreateFormDialogService, ImportDialogService } from '@ngx-formly/builder';
 import { vi } from 'vitest';
 
 import { HomePage } from './home-page';

@@ -1,4 +1,4 @@
-import { DefaultForm } from '@formly-editor/core';
+import { DefaultForm } from '@ngx-formly/builder';
 
 export const formTemplates: DefaultForm[] = [
   {
