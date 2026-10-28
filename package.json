@@ -40,7 +40,14 @@
     "test:core": "ng test core --watch=false",
     "test:material": "ng test material --watch=false",
     "test:builder-material": "ng test builder-material --watch=false",
-    "lint": "ng lint studio && ng lint state && ng lint core && ng lint material && ng lint builder-material"
+    "lint": "ng lint studio && ng lint state && ng lint core && ng lint material && ng lint builder-material",
+    "changeset": "changeset",
+    "release:status": "changeset status",
+    "release:version": "changeset version && npm install --package-lock-only --ignore-scripts",
+    "release:dry-run": "node scripts/release-dry-run.mjs",
+    "release:validate": "npm run build:builder-material && npm run check:packages && node scripts/check-release-artifacts.mjs && npm run release:dry-run -- --consumer",
+    "release:publish": "npm run release:validate && changeset publish",
+    "test:release": "node --test scripts/check-release-artifacts.test.mjs && npm run release:dry-run"
   },
   "private": true,
   "packageManager": "npm@11.19.0",
@@ -91,6 +98,7 @@
     "@angular/build": "^22.2.3",
     "@angular/cli": "^22.2.3",
     "@angular/compiler-cli": "^22.2.3",
+    "@changesets/cli": "3.0.3",
     "@eslint/js": "^9.8.0",
     "@playwright/test": "^1.36.0",
     "@tailwindcss/postcss": "^4.1.17",
