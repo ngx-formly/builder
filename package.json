@@ -31,6 +31,9 @@
     "build:docs": "npm run build --workspace @ngx-formly/builder-docs",
     "check:docs": "npm run check --workspace @ngx-formly/builder-docs",
     "check:packages": "node scripts/check-package-contracts.mjs && node scripts/check-packed-consumer.mjs",
+    "check:api": "npm run build:builder-material && node scripts/check-api.mjs",
+    "update:api": "npm run build:builder-material && node scripts/check-api.mjs --update",
+    "test:api": "node --test scripts/check-api.test.mjs",
     "check:packages:e2e": "node scripts/check-packed-consumer.mjs --browser",
     "preview:docs": "npm run preview --workspace @ngx-formly/builder-docs",
     "test:e2e": "playwright test --config apps/studio/playwright.config.ts",
@@ -40,10 +43,7 @@
     "test:core": "ng test core --watch=false",
     "test:material": "ng test material --watch=false",
     "test:builder-material": "ng test builder-material --watch=false",
-    "lint": "ng lint studio && ng lint state && ng lint core && ng lint material && ng lint builder-material",
-    "check:api": "npm run build:builder-material && node scripts/check-api.mjs",
-    "update:api": "npm run build:builder-material && node scripts/check-api.mjs --update",
-    "test:api": "node --test scripts/check-api.test.mjs"
+    "lint": "ng lint studio && ng lint state && ng lint core && ng lint material && ng lint builder-material"
   },
   "private": true,
   "packageManager": "npm@11.19.0",
