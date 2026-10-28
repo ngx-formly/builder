@@ -1,0 +1,1009 @@
+import { computed, DestroyRef, Inject, inject, Injectable, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { FormlyFieldConfig } from '@ngx-formly/core';
+import { get, isEmpty, unset } from 'lodash-es';
+import { create } from 'mutative';
+import {
+  catchError,
+  debounceTime,
+  defer,
+  EMPTY,
+  filter,
+  map,
+  Observable,
+  Subject,
+  switchMap,
+  tap,
+} from 'rxjs';
+import { v4 as uuidv4 } from 'uuid';
+import {
+  BaseEditorForm,
+  DefaultForm,
+  EditorField,
+  EditorForm,
+  WorkspaceFolderNode,
+  WorkspaceHierarchy,
+} from '../model/types';
+import { BUILDER_ENGINE_CONFIG, BuilderEngineConfig, EngineFieldPreset } from './types';
+import { CORE_FORM_STORE, FormStoreRecoveryIssue, FormStoreService } from '../persistence/types';
+import { modifyPropertyTarget, PropertyChange } from './property-change';
+import {
+  clearFieldModelValue,
+  convertField,
+  generateFieldId,
+  generateFormId,
+} from './field-conversion';
+import {
+  addNodeToHierarchy,
+  createEmptyWorkspaceHierarchy,
+  moveNodeInHierarchy,
+  removeNodeFromHierarchy,
+  renameNodeInHierarchy,
+  toggleFolderExpansion,
+} from '../model/workspace-hierarchy.utils';
+
+@Injectable()
+export class BuilderEngineService {
+  protected readonly editorConfig: BuilderEngineConfig;
+  protected readonly formStoreService: FormStoreService;
+  private readonly destroyRef = inject(DestroyRef);
+  private pendingFormId: string | undefined;
+  private readonly autosaveTrigger$ = new Subject<string | null>();
+  private readonly autosaveEnabled: boolean;
+  private readonly autosaveDelay: number;
+
+  readonly saveActiveFormTrigger$ = new Subject<void>();
+  readonly saveStatusSrc = signal<'saved' | 'dirty' | 'saving' | 'error'>('saved');
+  readonly saveStatus = this.saveStatusSrc.asReadonly();
+  protected readonly storageRecoveryIssuesSrc = signal<readonly FormStoreRecoveryIssue[]>([]);
+  readonly storageRecoveryIssues = this.storageRecoveryIssuesSrc.asReadonly();
+  readonly hasStorageRecoveryIssues = computed(() => this.storageRecoveryIssues().length > 0);
+  readonly hasFormStorageRecoveryIssue = computed(() =>
+    this.storageRecoveryIssues().some((issue) => issue.kind === 'forms'),
+  );
+
+  protected readonly formListSrc = signal<BaseEditorForm[]>([]);
+  protected readonly hierarchySrc = signal<WorkspaceHierarchy>(createEmptyWorkspaceHierarchy(''));
+  protected readonly activeFieldIdSrc = signal<string | null>(null);
+  protected readonly activeFormSrc = signal<EditorForm | null>(null);
+  protected readonly activeFieldIdByFormSrc = signal<Record<string, string | null>>({});
+
+  readonly formList = this.formListSrc.asReadonly();
+  readonly hierarchy = this.hierarchySrc.asReadonly();
+  readonly hierarchyRootNodeIds = computed(() => this.hierarchy().rootNodeIds);
+  readonly hierarchyNodeMap = computed(() => this.hierarchy().nodeMap);
+  readonly activeFieldId = this.activeFieldIdSrc.asReadonly();
+  readonly activeForm = this.activeFormSrc.asReadonly();
+
+  readonly activeFormId = computed(() => this.activeForm()?.id);
+  readonly activeFormName = computed(() => this.activeForm()?.name);
+  readonly activeRootFieldIds = computed(() => this.activeForm()?.rootFieldIds ?? []);
+  readonly activeFieldMap = computed(() => this.activeForm()?.fieldMap ?? {});
+  readonly activeFieldCount = computed(() => Object.keys(this.activeFieldMap()).length);
+  readonly activeField = computed(() => {
+    const activeFieldId = this.activeFieldId();
+    if (!activeFieldId) {
+      return null;
+    }
+    return this.activeFieldMap()[activeFieldId] || null;
+  });
+  readonly activeFormFieldsRaw = computed(() =>
+    this.activeRootFieldIds().map((id) => this.buildField(id, this.activeFieldMap())),
+  );
+  readonly activeModel = computed(() => this.activeForm()?.model || {});
+  readonly activeLibraryId = computed(() => this.activeForm()?.libraryId ?? null);
+  readonly formSelected$ = new Subject<EditorForm | null>();
+
+  readonly activeFormFields = computed(() => structuredClone(this.activeFormFieldsRaw()));
+  readonly activePreviewFormFields = computed(() => {
+    const clonedFields = structuredClone(this.activeFormFieldsRaw());
+    clonedFields.forEach((f) => this.cleanField(f));
+    return clonedFields;
+  });
+  readonly activeFormFieldsJSON = computed(() =>
+    JSON.stringify(this.activePreviewFormFields(), null, 2),
+  );
+
+  constructor(
+    // eslint-disable-next-line @angular-eslint/prefer-inject -- The shell facade passes its existing configuration and store.
+    @Inject(BUILDER_ENGINE_CONFIG) config: BuilderEngineConfig,
+    // eslint-disable-next-line @angular-eslint/prefer-inject -- The shell facade passes its existing configuration and store.
+    @Inject(CORE_FORM_STORE) store: FormStoreService,
+  ) {
+    this.editorConfig = config;
+    this.formStoreService = store;
+    this.autosaveEnabled = config.autoSave === true;
+    this.autosaveDelay = config.autoSaveDelay ?? 3000;
+    this.hierarchySrc.set(createEmptyWorkspaceHierarchy(config.editorType));
+    this.formStoreService
+      .getFormList$(this.editorConfig.editorType)
+      .subscribe((formList) => this.formListSrc.set(formList));
+
+    this.refreshHierarchy();
+
+    this.formStoreService
+      .getRecoveryIssues$?.(this.editorConfig.editorType)
+      .pipe(takeUntilDestroyed())
+      .subscribe((issues) => this.storageRecoveryIssuesSrc.set(issues));
+
+    if (this.autosaveEnabled) {
+      this.autosaveTrigger$
+        .pipe(debounceTime(this.autosaveDelay), takeUntilDestroyed())
+        .subscribe((formId) => {
+          if (formId && formId === this.activeFormId() && this.saveStatus() === 'dirty') {
+            this.saveActiveForm();
+          }
+        });
+    }
+
+    this.saveActiveFormTrigger$
+      .pipe(
+        map(() => this.activeForm()),
+        filter((form) => !!form),
+        tap(() => this.saveStatusSrc.set('saving')),
+        switchMap((form) => {
+          return defer(() =>
+            this.formStoreService.updateForm$(
+              this.editorConfig.editorType,
+              this.convertToRawForm(form),
+            ),
+          ).pipe(
+            switchMap(() => this.formStoreService.getFormList$(this.editorConfig.editorType)),
+            tap(() => {
+              if (this.activeFormId() === form.id) {
+                this.saveStatusSrc.set(this.activeForm() === form ? 'saved' : 'dirty');
+              }
+            }),
+            catchError(() => {
+              this.pendingFormId = undefined;
+              this.saveStatusSrc.set('error');
+              return EMPTY;
+            }),
+          );
+        }),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe({
+        next: (formList) => {
+          this.formListSrc.set(formList);
+          if (this.pendingFormId) {
+            const formId = this.pendingFormId;
+            this.pendingFormId = undefined;
+            this.setActiveForm(formId);
+          }
+        },
+        error: () => this.saveStatusSrc.set('error'),
+      });
+  }
+
+  protected markFormDirty(): void {
+    this.saveStatusSrc.set('dirty');
+    if (this.autosaveEnabled) {
+      this.autosaveTrigger$.next(this.activeFormId() ?? null);
+    }
+  }
+
+  protected refreshHierarchy() {
+    if (this.formStoreService.getHierarchy$) {
+      this.formStoreService
+        .getHierarchy$(this.editorConfig.editorType)
+        .subscribe((hierarchy) => this.hierarchySrc.set(hierarchy));
+    }
+  }
+
+  resetCorruptedStorage(): void {
+    const resetStorage = this.formStoreService.resetCorruptedStorage$;
+    if (!resetStorage) {
+      return;
+    }
+
+    resetStorage
+      .call(this.formStoreService, this.editorConfig.editorType)
+      .pipe(
+        switchMap(() => this.formStoreService.getFormList$(this.editorConfig.editorType)),
+        tap((formList) => {
+          this.formListSrc.set(formList);
+          if (!formList.some((form) => form.id === this.activeFormId())) {
+            this.setActiveForm(null);
+            this.saveStatusSrc.set('saved');
+          }
+        }),
+        switchMap(() => this.formStoreService.getHierarchy$(this.editorConfig.editorType)),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe((hierarchy) => this.hierarchySrc.set(hierarchy));
+  }
+
+  getStorageRecoveryBackup(): string {
+    return JSON.stringify(
+      {
+        exportedAt: new Date().toISOString(),
+        editorType: this.editorConfig.editorType,
+        entries: this.storageRecoveryIssues(),
+      },
+      null,
+      2,
+    );
+  }
+
+  setActiveField(fieldId: string | null): void {
+    this.activeFieldIdSrc.set(fieldId);
+
+    const formId = this.activeFormId();
+    if (formId) {
+      this.activeFieldIdByFormSrc.update((map) => ({
+        ...map,
+        [formId]: fieldId,
+      }));
+    }
+  }
+
+  setActiveFormName(newName: string): void {
+    const form = this.activeForm();
+    if (!form) return;
+
+    const newForm = { ...form, name: newName };
+    this.activeFormSrc.set(newForm);
+    this.markFormDirty();
+  }
+
+  setWorkspaceNodeName(nodeId: string, newName: string): void {
+    if (this.isStorageMutationBlocked()) return;
+
+    const node = this.hierarchyNodeMap()[nodeId];
+    if (!node) return;
+
+    const previousHierarchy = this.hierarchy();
+    const updated = renameNodeInHierarchy(previousHierarchy, nodeId, newName);
+    this.hierarchySrc.set(updated);
+
+    if (this.formStoreService.saveHierarchy$) {
+      this.formStoreService.saveHierarchy$(this.editorConfig.editorType, updated).subscribe({
+        error: (error) => {
+          this.hierarchySrc.set(previousHierarchy);
+          this.handlePersistenceError('rename workspace node', error);
+        },
+      });
+    }
+
+    if (this.hasStorageRecoveryIssues()) return;
+
+    if (node.type === 'form') {
+      this.formStoreService.getForm$(this.editorConfig.editorType, nodeId).subscribe((rawForm) => {
+        if (!rawForm) {
+          return;
+        }
+
+        rawForm.name = newName;
+        this.formStoreService.updateForm$(this.editorConfig.editorType, rawForm).subscribe({
+          next: () => {
+            this.formStoreService
+              .getFormList$(this.editorConfig.editorType)
+              .subscribe((formList) => this.formListSrc.set(formList));
+
+            if (this.activeFormId() === nodeId) {
+              this.setActiveFormName(newName);
+            }
+          },
+          error: (error) => this.handlePersistenceError('rename form', error),
+        });
+      });
+    }
+  }
+
+  setActiveForm(formId: string | null) {
+    if (!formId) {
+      this.pendingFormId = undefined;
+      this.activeFormSrc.set(null);
+      this.activeFieldIdSrc.set(null);
+      this.formSelected$.next(null);
+      return;
+    }
+
+    if (formId === this.activeFormId()) {
+      this.pendingFormId = undefined;
+      return;
+    }
+
+    if (this.hasFormStorageRecoveryIssue()) {
+      this.saveStatusSrc.set('error');
+      return;
+    }
+
+    if (this.activeForm() && this.saveStatus() !== 'saved') {
+      this.pendingFormId = formId;
+      if (this.saveStatus() !== 'saving') {
+        this.saveActiveForm();
+      }
+      return;
+    }
+
+    this.formStoreService.getForm$(this.editorConfig.editorType, formId).subscribe((rawForm) => {
+      if (!rawForm) {
+        this.saveStatusSrc.set('error');
+        console.error(`Error loading form with id: ${formId}`);
+        return;
+      }
+
+      if (!this.editorConfig.libraries.find((library) => library.id === rawForm.libraryId)) {
+        this.activeFormSrc.set(null);
+        this.activeFieldIdSrc.set(null);
+        this.formSelected$.next(null);
+        console.error(`Library config with id "${rawForm.libraryId}" not found.`);
+        return;
+      }
+
+      const newActiveForm = this.convertFromRawForm(rawForm);
+      this.activeFormSrc.set(newActiveForm);
+      this.saveStatusSrc.set('saved');
+
+      const restoredFieldId = this.activeFieldIdByFormSrc()[formId];
+      if (restoredFieldId && newActiveForm.fieldMap[restoredFieldId]) {
+        this.activeFieldIdSrc.set(restoredFieldId);
+      } else {
+        this.activeFieldIdSrc.set(newActiveForm.rootFieldIds[0] ?? null);
+      }
+
+      this.formSelected$.next(newActiveForm);
+    });
+  }
+
+  saveActiveForm() {
+    this.saveActiveFormTrigger$.next();
+  }
+
+  addForm$(
+    name: string,
+    fields: FormlyFieldConfig[] = [],
+    model: Record<string, unknown>,
+    libraryId: string,
+    setActive = true,
+    parentId?: string | null,
+  ): Observable<void> {
+    // Create Form
+    const newRawForm: DefaultForm = {
+      id: generateFormId(),
+      libraryId: libraryId,
+      fieldCount: 0,
+      parentId: parentId ?? null,
+      name,
+      fields,
+      model,
+    };
+    const newForm = this.convertFromRawForm(newRawForm);
+    newRawForm.fieldCount = Object.keys(newForm.fieldMap).length;
+
+    return this.formStoreService
+      .addForm$(this.editorConfig.editorType, newRawForm)
+      .pipe(switchMap(() => this.formStoreService.getFormList$(this.editorConfig.editorType)))
+      .pipe(
+        tap((formList) => {
+          this.formListSrc.set(formList);
+          this.refreshHierarchy();
+          if (setActive) {
+            this.setActiveForm(newForm.id);
+          }
+        }),
+        map(() => undefined),
+      );
+  }
+
+  removeForm(formId: string) {
+    if (this.isStorageMutationBlocked()) return;
+
+    this.formStoreService
+      .removeForm$(this.editorConfig.editorType, formId)
+      .pipe(switchMap(() => this.formStoreService.getFormList$(this.editorConfig.editorType)))
+      .subscribe({
+        next: (formList) => {
+          this.formListSrc.set(formList);
+          this.refreshHierarchy();
+          this.setActiveForm(null);
+        },
+        error: (error) => this.handlePersistenceError('remove form', error),
+      });
+  }
+
+  createFolder(name: string, parentId: string | null = null): string | undefined {
+    if (this.isStorageMutationBlocked()) return undefined;
+
+    const folderId = `folder_${uuidv4().substring(0, 8)}`;
+    const parentNode = parentId ? this.hierarchyNodeMap()[parentId] : null;
+    const parentPath = parentNode ? parentNode.idPath : [];
+
+    const folderNode: WorkspaceFolderNode = {
+      id: folderId,
+      name,
+      type: 'folder',
+      parentId,
+      idPath: [...parentPath, folderId],
+      childIds: [],
+      isExpanded: true,
+    };
+
+    const previousHierarchy = this.hierarchy();
+    const updated = addNodeToHierarchy(previousHierarchy, folderNode);
+    this.hierarchySrc.set(updated);
+    if (this.formStoreService.saveHierarchy$) {
+      this.formStoreService.saveHierarchy$(this.editorConfig.editorType, updated).subscribe({
+        error: (error) => {
+          this.hierarchySrc.set(previousHierarchy);
+          this.handlePersistenceError('create folder', error);
+        },
+      });
+    }
+    return folderId;
+  }
+
+  deleteWorkspaceNode(nodeId: string): void {
+    if (this.isStorageMutationBlocked()) return;
+
+    const node = this.hierarchyNodeMap()[nodeId];
+    if (!node) return;
+
+    if (node.type === 'form') {
+      this.removeForm(nodeId);
+      return;
+    }
+
+    const previousHierarchy = this.hierarchy();
+    const { hierarchy: updatedHierarchy, removedNodeIds } = removeNodeFromHierarchy(
+      previousHierarchy,
+      nodeId,
+    );
+    this.hierarchySrc.set(updatedHierarchy);
+
+    if (this.formStoreService.saveHierarchy$) {
+      this.formStoreService
+        .saveHierarchy$(this.editorConfig.editorType, updatedHierarchy)
+        .subscribe({
+          error: (error) => {
+            this.hierarchySrc.set(previousHierarchy);
+            this.handlePersistenceError('delete workspace node', error);
+          },
+        });
+    }
+
+    if (this.hasStorageRecoveryIssues()) return;
+
+    for (const removedId of removedNodeIds) {
+      if (this.formList().some((f) => f.id === removedId)) {
+        this.formStoreService.removeForm$(this.editorConfig.editorType, removedId).subscribe({
+          error: (error) => this.handlePersistenceError('remove nested form', error),
+        });
+      }
+      if (this.activeFormId() === removedId) {
+        this.setActiveForm(null);
+      }
+    }
+
+    this.formStoreService
+      .getFormList$(this.editorConfig.editorType)
+      .subscribe((formList) => this.formListSrc.set(formList));
+  }
+
+  moveWorkspaceNode(nodeId: string, targetFolderId: string | null, targetIndex?: number): void {
+    if (this.isStorageMutationBlocked()) return;
+
+    try {
+      const previousHierarchy = this.hierarchy();
+      const updated = moveNodeInHierarchy(previousHierarchy, nodeId, targetFolderId, targetIndex);
+      this.hierarchySrc.set(updated);
+      if (this.formStoreService.saveHierarchy$) {
+        this.formStoreService.saveHierarchy$(this.editorConfig.editorType, updated).subscribe({
+          error: (error) => {
+            this.hierarchySrc.set(previousHierarchy);
+            this.handlePersistenceError('move workspace node', error);
+          },
+        });
+      }
+
+      if (this.hasStorageRecoveryIssues()) return;
+
+      const node = updated.nodeMap[nodeId];
+      if (node && node.type === 'form') {
+        this.formStoreService
+          .getForm$(this.editorConfig.editorType, nodeId)
+          .subscribe((rawForm) => {
+            if (rawForm) {
+              rawForm.parentId = targetFolderId;
+              this.formStoreService.updateForm$(this.editorConfig.editorType, rawForm).subscribe({
+                error: (error) => this.handlePersistenceError('move form', error),
+              });
+            }
+          });
+      }
+    } catch (e) {
+      console.error('Failed to move workspace node', e);
+    }
+  }
+
+  renameWorkspaceNode(nodeId: string, newName: string): void {
+    this.setWorkspaceNodeName(nodeId, newName);
+  }
+
+  toggleFolderExpansion(folderId: string, isExpanded?: boolean): void {
+    if (this.isStorageMutationBlocked()) return;
+
+    const previousHierarchy = this.hierarchy();
+    const updated = toggleFolderExpansion(previousHierarchy, folderId, isExpanded);
+    this.hierarchySrc.set(updated);
+    if (this.formStoreService.saveHierarchy$) {
+      this.formStoreService.saveHierarchy$(this.editorConfig.editorType, updated).subscribe({
+        error: (error) => {
+          this.hierarchySrc.set(previousHierarchy);
+          this.handlePersistenceError('toggle folder', error);
+        },
+      });
+    }
+  }
+
+  private isStorageMutationBlocked(): boolean {
+    if (!this.hasStorageRecoveryIssues()) {
+      return false;
+    }
+    this.saveStatusSrc.set('error');
+    return true;
+  }
+
+  private handlePersistenceError(action: string, error: unknown): void {
+    this.saveStatusSrc.set('error');
+    console.error(`Failed to ${action}`, error);
+  }
+
+  modifyActiveField(change: PropertyChange): void {
+    if (!change.path) {
+      throw new Error('Path is missing from field change');
+    }
+
+    const form = this.activeForm();
+    if (!form) return;
+
+    const activeFieldId = this.activeFieldIdSrc();
+    if (!activeFieldId) return;
+
+    const activeField = this.getField(activeFieldId);
+    if (!activeField) return;
+
+    const newActiveField = modifyPropertyTarget(activeField, change);
+    const newFieldMap = { ...this.activeFieldMap(), [newActiveField._info.id]: newActiveField };
+
+    const newForm = { ...form, fieldMap: newFieldMap };
+    this.activeFormSrc.set(newForm);
+    this.markFormDirty();
+  }
+
+  setActiveModel(newModel: Record<string, unknown>): void {
+    const form = this.activeForm();
+    if (!form) return;
+
+    const newForm = { ...form, model: newModel };
+    this.activeFormSrc.set(newForm);
+    this.markFormDirty();
+  }
+
+  modifyActiveModel(newModelJSON: string): void {
+    const form = this.activeForm();
+    if (!form) return;
+
+    const newModel = JSON.parse(newModelJSON);
+
+    const newForm = { ...form, model: newModel };
+    this.activeFormSrc.set(newForm);
+    this.markFormDirty();
+  }
+
+  getField(fieldId: string): EditorField | undefined {
+    return this.activeFieldMap()?.[fieldId];
+  }
+
+  private getTypeOptions(libraryId: string) {
+    return (
+      this.editorConfig.libraries.find((library) => library.id === libraryId)?.fieldTypes ?? []
+    );
+  }
+
+  private getDefaultField(type: string, libraryId: string): FormlyFieldConfig {
+    const library = this.editorConfig.libraries.find((library) => library.id === libraryId);
+    const option = library?.fieldTypes.find((field) => field.name === type);
+    return structuredClone(
+      option ? { ...option.defaultConfig, type: option.name } : (library?.defaultField ?? {}),
+    );
+  }
+
+  protected insertId(id: string, arr: string[], index: number | undefined) {
+    let newArr: string[];
+    if (typeof index === 'number') {
+      newArr = [...arr.slice(0, index), id, ...arr.slice(index)];
+    } else {
+      newArr = [...arr, id];
+    }
+
+    return newArr;
+  }
+
+  buildField(fieldId: string, fieldMap: Record<string, EditorField>): EditorField {
+    const field = fieldMap[fieldId];
+    const clonedField: EditorField = structuredClone(field);
+    const info = clonedField._info;
+    if (info.isFieldArray && info.childIds.length) {
+      const fieldArray = this.buildField(info.childIds[0], fieldMap);
+      if (fieldArray) {
+        clonedField.fieldArray = fieldArray;
+      }
+    } else if (info.childIds.length) {
+      clonedField.fieldGroup = info.childIds
+        .map((id) => this.buildField(id, fieldMap))
+        .filter((f: EditorField | undefined): f is EditorField => !!f);
+    }
+    return clonedField;
+  }
+  cleanField(field: EditorField): void {
+    if (field._info.isParent) {
+      if (field._info.isFieldArray && field.fieldArray) {
+        this.cleanField(field.fieldArray);
+      } else if (field.fieldGroup?.length) {
+        field.fieldGroup.forEach((f: EditorField) => this.cleanField(f));
+      }
+    }
+
+    // Remove editor properties
+    unset(field, '_info');
+
+    // Remove empty properties
+    [
+      'wrappers',
+      'templateOptions',
+      'props',
+      'expression',
+      'className',
+      'fieldGroupClassName',
+      'validation.messages',
+      'validation',
+    ].forEach((p) => {
+      if (isEmpty(get(field, p))) {
+        unset(field, p);
+      }
+    });
+  }
+  convertFromRawForm({ id, name, libraryId, fields, model }: DefaultForm): EditorForm {
+    id = id || generateFormId();
+    const fieldMap: Record<string, EditorField> = {};
+    const fieldTypeOptions = this.getTypeOptions(libraryId);
+    const rootFields = fields.map((f) =>
+      convertField(
+        f,
+        generateFieldId(f.type as string),
+        id,
+        [],
+        fieldMap,
+        fieldTypeOptions,
+        (type: string) => this.getDefaultField(type, libraryId),
+      ),
+    );
+    const rootFieldIds = rootFields.map((f) => f._info.id);
+
+    return {
+      id,
+      name,
+      libraryId,
+      fieldCount: Object.keys(fieldMap).length,
+      fieldMap,
+      rootFieldIds,
+      model,
+    };
+  }
+  convertToRawForm({
+    id,
+    libraryId,
+    name,
+    fieldMap,
+    rootFieldIds,
+    model,
+  }: EditorForm): DefaultForm {
+    const fields: EditorField[] = rootFieldIds.map((id) => this.buildField(id, fieldMap));
+    fields.forEach((f) => this.cleanField(f));
+    return {
+      id,
+      libraryId: libraryId,
+      name,
+      fieldCount: Object.keys(fieldMap).length,
+      fields,
+      model,
+    };
+  }
+  getFieldIndex(fieldId: string): number {
+    const field = this.getField(fieldId);
+    if (!field) return -1;
+
+    const idPath = field._info.idPath;
+    const parentId = idPath[idPath.length - 2];
+
+    if (parentId) {
+      const parent = this.getField(parentId);
+      if (!parent) return -1;
+      return parent._info.childIds.indexOf(fieldId);
+    }
+
+    const form = this.activeForm();
+    if (!form) return -1;
+    return form.rootFieldIds.indexOf(fieldId);
+  }
+  addField(fieldType: string, parentId?: string, index?: number, preset?: EngineFieldPreset): void {
+    const form = this.activeForm();
+    if (!form) return;
+
+    const activeLibraryId = this.activeLibraryId();
+    if (!activeLibraryId) {
+      throw new Error('No active configuration is set.');
+    }
+
+    const newFieldId = generateFieldId(fieldType);
+    const newForm = create(form, (draft) => {
+      const fieldMap = draft.fieldMap;
+      const parent = parentId ? fieldMap[parentId] : undefined;
+
+      // Create new field
+      convertField(
+        preset?.field ?? this.getDefaultField(fieldType, activeLibraryId),
+        newFieldId,
+        draft.id,
+        parent ? parent._info.idPath : [],
+        fieldMap as Record<string, EditorField>,
+        this.getTypeOptions(activeLibraryId),
+        (type: string) => this.getDefaultField(type, activeLibraryId),
+      );
+
+      // Add new field to parent
+      if (parent) {
+        if (parent._info.isFieldArray) {
+          const previousChildId = parent._info.childIds[0];
+          const removeRecursively = (fieldId: string) => {
+            const field = fieldMap[fieldId];
+            if (!field) return;
+
+            field._info.childIds.forEach(removeRecursively);
+            delete fieldMap[fieldId];
+          };
+
+          if (previousChildId) {
+            removeRecursively(previousChildId);
+          }
+          parent._info.childIds = [newFieldId];
+        } else {
+          parent._info.childIds = this.insertId(newFieldId, parent._info.childIds, index);
+        }
+      } else {
+        // Add new field as root field
+        draft.rootFieldIds = this.insertId(newFieldId, draft.rootFieldIds, index);
+      }
+    });
+
+    // Set active form and field
+    this.activeFormSrc.set(newForm);
+    this.markFormDirty();
+    this.activeFieldIdSrc.set(newFieldId);
+  }
+  removeField(fieldId: string): void {
+    const form = this.activeForm();
+    if (!form) return;
+    const field = form.fieldMap[fieldId];
+    if (!field) return;
+    const activeFieldId = this.activeFieldIdSrc();
+    const activeField = activeFieldId ? form.fieldMap[activeFieldId] : undefined;
+
+    const newForm = create(form, (draft) => {
+      const fieldMap = draft.fieldMap;
+      const field = fieldMap[fieldId];
+      const parentId = field._info.idPath[field._info.idPath.length - 2];
+
+      // Remove field from parent's childIds or from rootFieldIds
+      if (parentId) {
+        const parent = fieldMap[parentId];
+        parent._info.childIds = parent._info.childIds.filter((id) => id !== fieldId);
+      } else {
+        draft.rootFieldIds = draft.rootFieldIds.filter((id) => id !== fieldId);
+      }
+
+      clearFieldModelValue(fieldId, fieldMap as Record<string, EditorField>, draft.model);
+
+      // Remove field and its descendants from field map
+      const removeRecursively = (id: string) => {
+        const field = fieldMap[id];
+        if (field) {
+          field._info.childIds.forEach(removeRecursively);
+          delete fieldMap[id];
+        }
+      };
+      removeRecursively(fieldId);
+    });
+
+    // Set active form
+    this.activeFormSrc.set(newForm);
+    this.markFormDirty();
+
+    // Clear active field if it was removed directly or as part of a removed subtree
+    if (activeFieldId === fieldId || activeField?._info.idPath.includes(fieldId)) {
+      this.activeFieldIdSrc.set(null);
+    }
+  }
+  moveField(
+    fieldId: string,
+    fromIndex: number,
+    toIndex: number | undefined,
+    toParentId?: string | undefined,
+  ): void {
+    const form = this.activeForm();
+    if (!form) return;
+    const field = form.fieldMap[fieldId];
+    if (!field) return;
+
+    const newForm = create(form, (draft) => {
+      const fieldMap = draft.fieldMap;
+      const field = fieldMap[fieldId];
+      const currentParentId = field._info.idPath[field._info.idPath.length - 2];
+      const targetParent = toParentId ? fieldMap[toParentId] : undefined;
+
+      // Prevent moving into self or descendant
+      if (targetParent?._info.idPath.includes(fieldId)) {
+        return;
+      }
+
+      // Remove from current parent or root
+      if (currentParentId) {
+        const currentParent = fieldMap[currentParentId];
+        currentParent._info.childIds = currentParent._info.childIds.filter(
+          (id: string) => id !== fieldId,
+        );
+      } else {
+        draft.rootFieldIds = draft.rootFieldIds.filter((id) => id !== fieldId);
+      }
+
+      // Insert into target parent or root
+      if (targetParent) {
+        if (targetParent._info.isFieldArray) {
+          targetParent._info.childIds = [fieldId];
+        } else {
+          let insertIndex =
+            typeof toIndex === 'number' ? toIndex : targetParent._info.childIds.length;
+
+          // If reordering within the same parent and the original index was before the target, the removal shifted indices left
+          if (currentParentId === targetParent._info.id && fromIndex < insertIndex) {
+            insertIndex--;
+          }
+
+          targetParent._info.childIds = this.insertId(
+            fieldId,
+            targetParent._info.childIds,
+            insertIndex,
+          );
+        }
+      } else {
+        let insertIndex = typeof toIndex === 'number' ? toIndex : draft.rootFieldIds.length;
+
+        // If reordering within root and the original index was before the target, the removal shifted indices left
+        if (!currentParentId && fromIndex < insertIndex) {
+          insertIndex--;
+        }
+
+        draft.rootFieldIds = this.insertId(fieldId, draft.rootFieldIds, insertIndex);
+      }
+
+      // Update id path for new field and descendants
+      const updateIdPath = (currFieldId: string, parentPath: string[]) => {
+        const currField = fieldMap[currFieldId];
+        currField._info.idPath = [...parentPath, currFieldId];
+        currField._info.childIds.forEach((childId) =>
+          updateIdPath(childId, currField._info.idPath),
+        );
+      };
+
+      updateIdPath(fieldId, targetParent ? targetParent._info.idPath : []);
+    });
+
+    if (newForm === form) return;
+
+    this.activeFormSrc.set(newForm);
+    this.markFormDirty();
+    // keep moved field active
+    this.activeFieldIdSrc.set(fieldId);
+  }
+
+  replaceField(fieldType: string, fieldId: string): void {
+    const form = this.activeForm();
+    if (!form) return;
+
+    const field = form.fieldMap[fieldId];
+    if (!field || field.type === fieldType) return;
+
+    const activeLibraryId = this.activeLibraryId();
+    if (!activeLibraryId) {
+      throw new Error('No active configuration is set.');
+    }
+
+    const fieldTypeOptions = this.getTypeOptions(activeLibraryId);
+    if (!fieldTypeOptions.some((option) => option.name === fieldType)) return;
+
+    const parentId = field._info.idPath[field._info.idPath.length - 2];
+    const siblingIds = parentId ? form.fieldMap[parentId]?._info.childIds : form.rootFieldIds;
+    const siblingIndex = siblingIds?.indexOf(fieldId) ?? -1;
+    if (siblingIndex < 0) return;
+
+    const replacementId = generateFieldId(fieldType);
+
+    const newForm = create(form, (draft) => {
+      const fieldMap = draft.fieldMap;
+      const oldField = fieldMap[fieldId];
+      const parent = parentId ? fieldMap[parentId] : undefined;
+
+      convertField(
+        this.getDefaultField(fieldType, activeLibraryId),
+        replacementId,
+        draft.id,
+        parent?._info.idPath ?? [],
+        fieldMap as Record<string, EditorField>,
+        fieldTypeOptions,
+        (type: string) => this.getDefaultField(type, activeLibraryId),
+      );
+
+      const replacement = fieldMap[replacementId];
+      const oldChildIds = [...oldField._info.childIds];
+
+      if (oldField.key !== undefined) {
+        replacement.key = oldField.key;
+      }
+      if (oldField.className !== undefined) {
+        replacement.className = oldField.className;
+      }
+      if (oldField.fieldGroupClassName !== undefined) {
+        replacement.fieldGroupClassName = oldField.fieldGroupClassName;
+      }
+
+      const canTransferChildren = oldField._info.isParent && replacement._info.isParent;
+
+      const removeSubtree = (id: string) => {
+        const child = fieldMap[id];
+        if (!child) return;
+
+        child._info.childIds.forEach(removeSubtree);
+        delete fieldMap[id];
+      };
+
+      if (canTransferChildren) {
+        replacement._info.childIds.forEach(removeSubtree);
+        const transferredChildIds = replacement._info.isFieldArray
+          ? oldChildIds.slice(0, 1)
+          : oldChildIds;
+        const transferredChildIdSet = new Set(transferredChildIds);
+
+        oldChildIds.filter((childId) => !transferredChildIdSet.has(childId)).forEach(removeSubtree);
+        replacement._info.childIds = transferredChildIds;
+
+        const updateIdPath = (id: string, parentPath: string[]) => {
+          const child = fieldMap[id];
+          if (!child) return;
+
+          child._info.idPath = [...parentPath, id];
+          child._info.childIds.forEach((childId) => updateIdPath(childId, child._info.idPath));
+        };
+
+        oldChildIds.forEach((childId) => updateIdPath(childId, replacement._info.idPath));
+      } else {
+        oldChildIds.forEach(removeSubtree);
+      }
+
+      if (parent) {
+        parent._info.childIds[siblingIndex] = replacementId;
+      } else {
+        draft.rootFieldIds[siblingIndex] = replacementId;
+      }
+
+      clearFieldModelValue(fieldId, fieldMap as Record<string, EditorField>, draft.model);
+      delete fieldMap[fieldId];
+    });
+
+    this.activeFormSrc.set(newForm);
+    this.markFormDirty();
+    this.activeFieldIdSrc.set(replacementId);
+  }
+}

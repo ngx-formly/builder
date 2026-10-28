@@ -1,14 +1,19 @@
-import { ChangeDetectionStrategy, Component } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { bootstrapApplication } from '@angular/platform-browser';
 import {
   FormlyBuilder,
+  CoreFormService,
   createLibrary,
   primengPreset,
   provideFormlyBuilder,
 } from '@ngx-formly/builder';
 import { withMarkdownType, withTabsType } from '@ngx-formly/builder-material-fields';
 import { withTabsTypeBuilder } from '@ngx-formly/builder-material';
-import { createEmptyWorkspaceHierarchy, type FormStoreService } from '@ngx-formly/builder-state';
+import {
+  BuilderEngineService,
+  createEmptyWorkspaceHierarchy,
+  type FormStoreService,
+} from '@ngx-formly/builder-state';
 import { definePreset } from '@primeuix/themes';
 import Aura from '@primeuix/themes/aura';
 import { providePrimeNG } from 'primeng/config';
@@ -49,6 +54,12 @@ export type ConsumerFormStore = FormStoreService;
   imports: [FormlyBuilder],
   template: `<formly-builder class="block h-full" />`,
 })
-class ConsumerApp {}
+class ConsumerApp {
+  constructor() {
+    if (inject(BuilderEngineService) !== inject(CoreFormService)) {
+      throw new Error('The shell must share its headless engine');
+    }
+  }
+}
 
 bootstrapApplication(ConsumerApp, { providers: consumerProviders }).catch(console.error);

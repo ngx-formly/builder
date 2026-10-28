@@ -1,3 +1,7 @@
+import {
+  BuilderEngineService,
+  BuilderFieldStateService as EngineFieldState,
+} from '@ngx-formly/builder-state';
 import { EnvironmentProviders, makeEnvironmentProviders, signal, Type } from '@angular/core';
 import {
   ConfigOption,
@@ -34,6 +38,7 @@ import { CORE_THEME } from './theme';
 export function provideCore(): EnvironmentProviders {
   return makeEnvironmentProviders([
     CoreFormService,
+    { provide: BuilderEngineService, useExisting: CoreFormService },
     CoreFieldService,
     {
       provide: CORE_STYLES_CONFIG,
@@ -46,6 +51,7 @@ export function provideCore(): EnvironmentProviders {
     ArrayTableDialogService,
     DNDService,
     BuilderFieldStateService,
+    { provide: EngineFieldState, useExisting: BuilderFieldStateService },
   ]);
 }
 

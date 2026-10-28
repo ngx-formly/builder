@@ -1,6 +1,3 @@
-import { get, set, unset } from 'lodash-es';
-import { create } from 'mutative';
-
 import { TrackByFunction } from '@angular/core';
 import z from 'zod';
 import type { ArrayPropertyConfig } from './array/array.config';
@@ -11,13 +8,7 @@ import type { InputPropertyConfig } from './input/input.config';
 import type { MarkdownPropertyConfig } from './markdown/markdown.config';
 import type { ObjectPropertyConfig } from './object/object.config';
 import type { SelectPropertyConfig, SelectPropertyOption } from './select/select.config';
-import {
-  BasePropertyConfig,
-  PropertyChange,
-  PropertyChangeType,
-  PropertyConfig,
-  PropertyType,
-} from './types';
+import { BasePropertyConfig, PropertyConfig, PropertyType } from './types';
 
 export const trackByPropertyKey: TrackByFunction<PropertyConfig> = (_, property: PropertyConfig) =>
   property.key;
@@ -29,63 +20,7 @@ export function getChildPath(path: string[], key: string | number | undefined): 
   return [...path, ...key.toString().split('.')];
 }
 
-const modifyTargetKey = <T extends Record<string, unknown>>(
-  target: T,
-  { path, newPath }: Omit<PropertyChange, 'type'>,
-): T => {
-  if (!newPath?.length) {
-    throw new Error('Unable to modify target key without newPath');
-  }
-
-  const oldKey = path[path.length - 1];
-  const newKey = newPath[path.length - 1];
-
-  // Modify key without changing position in object
-  const modifyKey = (p: Record<string, unknown>) =>
-    Object.fromEntries(Object.entries(p).map(([k, v]) => [k === oldKey ? newKey : k, v]));
-
-  if (newPath.length > 1) {
-    const parentPath = newPath.slice(0, -1);
-    const parent = get(target, parentPath);
-    const newParent = modifyKey(parent);
-
-    return create(target, (draft) => {
-      set(draft, parentPath, newParent);
-    });
-  } else {
-    return modifyKey(target) as T;
-  }
-};
-
-const modifyTargetValue = <T extends Record<string, unknown>>(
-  target: T,
-  { path, value }: Omit<PropertyChange, 'type'>,
-): T =>
-  create(target, (draft) => {
-    set(draft, path, value);
-  });
-
-const modifyTargetClear = <T extends Record<string, unknown>>(
-  target: T,
-  { path }: Omit<PropertyChange, 'type'>,
-): T =>
-  create(target, (draft) => {
-    unset(draft, path);
-  });
-
-export const modifyPropertyTarget = <T extends Record<string, unknown>>(
-  target: T,
-  { type, ...change }: PropertyChange,
-): T => {
-  switch (type) {
-    case PropertyChangeType.KEY:
-      return modifyTargetKey(target, change);
-    case PropertyChangeType.VALUE:
-      return modifyTargetValue(target, change);
-    case PropertyChangeType.CLEAR:
-      return modifyTargetClear(target, change);
-  }
-};
+export { modifyPropertyTarget } from '@ngx-formly/builder-state';
 
 export const getDefaultProperty = (
   type: PropertyType,

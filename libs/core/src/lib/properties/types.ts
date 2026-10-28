@@ -66,18 +66,7 @@ export interface BasePropertyConfig {
   colSpan?: number;
 }
 
-export enum PropertyChangeType {
-  KEY,
-  VALUE,
-  CLEAR,
-}
-
-export interface PropertyChange {
-  type: PropertyChangeType;
-  path: string[];
-  newPath?: string[];
-  value?: unknown;
-}
+export { PropertyChangeType, type PropertyChange } from '@ngx-formly/builder-state';
 
 export type PropertyConfig =
   | ArrayPropertyConfig
