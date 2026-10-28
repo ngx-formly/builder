@@ -31,9 +31,24 @@ export interface EngineLibrary {
 export interface BuilderEngineConfig {
   editorType: string;
   libraries: EngineLibrary[];
+  /** Defaults to true. */
   autoSave?: boolean;
   autoSaveDelay?: number;
   formStore?: Type<FormStoreService>;
 }
 
 export const BUILDER_ENGINE_CONFIG = new InjectionToken<BuilderEngineConfig>('BuilderEngineConfig');
+
+/** A failed selection leaves the current document and save status unchanged. */
+export interface FormLoadError {
+  formId: string;
+  reason: 'not-found' | 'missing-library' | 'store-error' | 'invalid-form' | 'recovery-required';
+  libraryId?: string;
+  cause?: unknown;
+}
+
+export interface PersistenceError {
+  action: string;
+  cause: unknown;
+  failedFormIds?: string[];
+}

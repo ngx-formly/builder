@@ -67,11 +67,11 @@ host's Tailwind/PostCSS setup. The [embedding guide](../README.md#embedding-cont
 and [tarball consumer](../integration/package-consumer) are the executable reference. The
 current PrimeNG theme setup remains required until the migration in #8 finishes.
 
-Today a headless host can import `LocalFormStoreService`, `CORE_FORM_STORE`, document types and
-hierarchy helpers directly from `@ngx-formly/builder-state`. Provide the store in an Angular
-injector and call its observable methods with a dedicated editor ID. This loads no shell.
-The editing service/provider will become available through that same package in #7; it is not
-part of the current state entry point yet. Headless hosts supply their own controls and call
+A headless host imports `provideBuilderEngine`, `BuilderEngineService`, store contracts, document
+types and hierarchy helpers from `@ngx-formly/builder-state`. Provide the engine in an Angular
+environment injector with a dedicated editor ID. This loads no shell. The
+[store and lifecycle guide](asynchronous-stores.md) defines asynchronous store, selection, save and
+teardown behavior. Headless hosts supply their own controls and call
 engine operations, without `provideFormlyBuilder`, PrimeNG providers or builder styles.
 
 ## Follow-up sequence and rationale

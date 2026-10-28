@@ -3,6 +3,7 @@ import { AsyncPipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { toObservable } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
+import { ButtonDirective } from 'primeng/button';
 import { TabPanel, TabPanels, Tabs } from 'primeng/tabs';
 import { combineLatest, debounceTime, filter, map } from 'rxjs';
 import { EmptyNoForm } from '../../empty';
@@ -19,6 +20,7 @@ import { FormToolbarComponent } from './toolbar';
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     AsyncPipe,
+    ButtonDirective,
     FormToolbarComponent,
     FormBuilderContent,
     EmptyNoForm,
@@ -35,6 +37,60 @@ import { FormToolbarComponent } from './toolbar';
     class: 'flex flex-col h-full',
   },
   template: `
+    @if (formService.loadingFormId()) {
+      <p
+        role="status"
+        class="shrink-0 px-4 py-2"
+      >
+        Loading form…
+      </p>
+    }
+    @if (formService.formLoadError(); as error) {
+      <div
+        role="alert"
+        class="flex shrink-0 flex-wrap items-center gap-2 px-4 py-2"
+      >
+        <span>
+          @switch (error.reason) {
+            @case ('missing-library') {
+              This form needs the unavailable library “{{ error.libraryId }}”.
+            }
+            @case ('not-found') {
+              This form could not be found.
+            }
+            @case ('recovery-required') {
+              Recover the stored forms in the Forms panel before opening this form.
+            }
+            @case ('invalid-form') {
+              This form contains data that could not be opened.
+            }
+            @default {
+              This form could not be loaded. Check your connection and try again.
+            }
+          }
+        </span>
+        <button
+          pButton
+          type="button"
+          size="small"
+          (click)="formService.setActiveForm(error.formId)"
+        >
+          Retry load
+        </button>
+      </div>
+    }
+    @if (formService.persistenceError(); as error) {
+      <div
+        role="alert"
+        class="shrink-0 px-4 py-2"
+      >
+        Could not {{ error.action }}.
+        @if (error.failedFormIds?.length) {
+          Some forms were not deleted. Review the remaining items in the Forms panel before
+          retrying.
+        }
+      </div>
+    }
     @if (activeFormId()) {
       <core-form-toolbar class="shrink-0" />
 

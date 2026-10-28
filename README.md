@@ -214,6 +214,7 @@ const providers = [provideBuilderEngine({
 // engine.activePreviewFormFields() contains exported Formly fields.
 ```
 
+Autosave defaults to `true`, with a 3000 ms delay; set `autoSave: false` for explicit saves.
 The provider accepts an optional `formStore` class and `autoSaveDelay`. It does not register Formly
 runtime components. Headless hosts render their own controls and register their chosen Formly
 runtime separately. `BuilderFieldStateService` holds transient per-field UI state without storage.
@@ -223,3 +224,6 @@ event reports completed loads or unloads; the shell uses it to update library an
 Existing shell consumers keep `provideFormlyBuilder` and `CoreFormService`. That provider exposes
 the same engine and transient field-state instances through the state entry point. Do not also
 register `provideBuilderEngine` in the same injector. Storage keys and document formats are unchanged.
+
+See [Asynchronous stores and editor lifecycle](docs/asynchronous-stores.md) for custom-store
+contracts, error handling, and saving before closing the editor.

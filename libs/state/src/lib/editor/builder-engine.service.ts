@@ -5,15 +5,21 @@ import { get, isEmpty, unset } from 'lodash-es';
 import { create } from 'mutative';
 import {
   catchError,
+  concatMap,
   debounceTime,
   defer,
   EMPTY,
-  filter,
+  first,
+  forkJoin,
+  from,
   map,
   Observable,
+  of,
   Subject,
   switchMap,
+  takeUntil,
   tap,
+  toArray,
 } from 'rxjs';
 import { v4 as uuidv4 } from 'uuid';
 import {
@@ -24,7 +30,13 @@ import {
   WorkspaceFolderNode,
   WorkspaceHierarchy,
 } from '../model/types';
-import { BUILDER_ENGINE_CONFIG, BuilderEngineConfig, EngineFieldPreset } from './types';
+import {
+  BUILDER_ENGINE_CONFIG,
+  BuilderEngineConfig,
+  EngineFieldPreset,
+  FormLoadError,
+  PersistenceError,
+} from './types';
 import { CORE_FORM_STORE, FormStoreRecoveryIssue, FormStoreService } from '../persistence/types';
 import { modifyPropertyTarget, PropertyChange } from './property-change';
 import {
@@ -48,6 +60,17 @@ export class BuilderEngineService {
   protected readonly formStoreService: FormStoreService;
   private readonly destroyRef = inject(DestroyRef);
   private pendingFormId: string | undefined;
+  private readonly cancelLoad$ = new Subject<void>();
+  private loadVersion = 0;
+  private activeVersion = 0;
+  private readonly queuedSaves = new Set<number>();
+  private readonly operations$ = new Subject<() => Observable<unknown>>();
+  private readonly loadingFormIdSrc = signal<string | null>(null);
+  private readonly formLoadErrorSrc = signal<FormLoadError | null>(null);
+  private readonly persistenceErrorSrc = signal<PersistenceError | null>(null);
+  readonly loadingFormId = this.loadingFormIdSrc.asReadonly();
+  readonly formLoadError = this.formLoadErrorSrc.asReadonly();
+  readonly persistenceError = this.persistenceErrorSrc.asReadonly();
   private readonly autosaveTrigger$ = new Subject<string | null>();
   private readonly autosaveEnabled: boolean;
   private readonly autosaveDelay: number;
@@ -112,106 +135,179 @@ export class BuilderEngineService {
   ) {
     this.editorConfig = config;
     this.formStoreService = store;
-    this.autosaveEnabled = config.autoSave === true;
+    this.autosaveEnabled = config.autoSave ?? true;
     this.autosaveDelay = config.autoSaveDelay ?? 3000;
     this.hierarchySrc.set(createEmptyWorkspaceHierarchy(config.editorType));
-    this.formStoreService
-      .getFormList$(this.editorConfig.editorType)
-      .subscribe((formList) => this.formListSrc.set(formList));
+    this.operations$
+      .pipe(
+        concatMap((operation) => operation()),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe();
+    this.enqueue$(() => this.refreshWorkspace$()).subscribe({
+      error: (error) => this.handlePersistenceError('load workspace', error),
+    });
 
-    this.refreshHierarchy();
-
-    this.formStoreService
-      .getRecoveryIssues$?.(this.editorConfig.editorType)
-      .pipe(takeUntilDestroyed())
-      .subscribe((issues) => this.storageRecoveryIssuesSrc.set(issues));
+    defer(() => this.formStoreService.getRecoveryIssues$?.(this.editorConfig.editorType) ?? EMPTY)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (issues) => this.storageRecoveryIssuesSrc.set(issues),
+        error: (error) => this.handlePersistenceError('load recovery state', error),
+      });
 
     if (this.autosaveEnabled) {
       this.autosaveTrigger$
-        .pipe(debounceTime(this.autosaveDelay), takeUntilDestroyed())
+        .pipe(debounceTime(this.autosaveDelay), takeUntilDestroyed(this.destroyRef))
         .subscribe((formId) => {
           if (formId && formId === this.activeFormId() && this.saveStatus() === 'dirty') {
             this.saveActiveForm();
           }
         });
     }
-
     this.saveActiveFormTrigger$
-      .pipe(
-        map(() => this.activeForm()),
-        filter((form) => !!form),
-        tap(() => this.saveStatusSrc.set('saving')),
-        switchMap((form) => {
-          return defer(() =>
-            this.formStoreService.updateForm$(
-              this.editorConfig.editorType,
-              this.convertToRawForm(form),
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => this.requestSave());
+  }
+
+  // Queue the entire read/modify/write operation, not a snapshot captured before earlier writes.
+  private enqueue$<T>(operation: () => Observable<T>): Observable<T> {
+    return new Observable<T>((subscriber) => {
+      if (this.destroyRef.destroyed) {
+        subscriber.complete();
+        return;
+      }
+      this.operations$.next(() =>
+        subscriber.closed
+          ? EMPTY
+          : defer(operation).pipe(
+              tap({
+                next: (value) => subscriber.next(value),
+                error: (error) => subscriber.error(error),
+                complete: () => subscriber.complete(),
+              }),
+              catchError(() => EMPTY),
             ),
-          ).pipe(
-            switchMap(() => this.formStoreService.getFormList$(this.editorConfig.editorType)),
-            tap(() => {
-              if (this.activeFormId() === form.id) {
-                this.saveStatusSrc.set(this.activeForm() === form ? 'saved' : 'dirty');
-              }
-            }),
-            catchError(() => {
-              this.pendingFormId = undefined;
-              this.saveStatusSrc.set('error');
-              return EMPTY;
-            }),
-          );
+      );
+    }).pipe(takeUntilDestroyed(this.destroyRef));
+  }
+
+  private snapshot$<T>(read: () => Observable<T>): Observable<T> {
+    return defer(read).pipe(first(), takeUntilDestroyed(this.destroyRef));
+  }
+
+  private refreshWorkspace$(): Observable<void> {
+    return forkJoin({
+      forms: this.snapshot$(() => this.formStoreService.getFormList$(this.editorConfig.editorType)),
+      hierarchy: this.snapshot$(() =>
+        this.formStoreService.getHierarchy$(this.editorConfig.editorType),
+      ),
+    }).pipe(
+      tap(({ forms, hierarchy }) => {
+        if (!this.hasFormStorageRecoveryIssue()) this.formListSrc.set(forms);
+        if (!this.storageRecoveryIssues().some((issue) => issue.kind === 'hierarchy')) {
+          this.hierarchySrc.set(hierarchy);
+        }
+      }),
+      map(() => undefined),
+    );
+  }
+
+  private runMutation(
+    action: string,
+    operation: () => Observable<unknown>,
+    recovery = false,
+  ): void {
+    this.enqueue$(() => {
+      if (!recovery && this.isStorageMutationBlocked()) return EMPTY;
+      this.persistenceErrorSrc.set(null);
+      return defer(operation).pipe(
+        catchError((error) => {
+          this.handlePersistenceError(action, error);
+          return of(undefined);
         }),
-        takeUntilDestroyed(this.destroyRef),
-      )
-      .subscribe({
-        next: (formList) => {
-          this.formListSrc.set(formList);
-          if (this.pendingFormId) {
-            const formId = this.pendingFormId;
-            this.pendingFormId = undefined;
-            this.setActiveForm(formId);
+        switchMap(() => this.refreshWorkspace$()),
+      );
+    }).subscribe({ error: (error) => this.handlePersistenceError(action, error) });
+  }
+
+  private requestSave(): void {
+    const formId = this.activeFormId();
+    const version = this.activeVersion;
+    if (!formId || this.queuedSaves.has(version) || this.isStorageMutationBlocked()) return;
+    this.queuedSaves.add(version);
+    this.saveStatusSrc.set('saving');
+    this.enqueue$(() => {
+      const form = this.activeForm();
+      if (!form || version !== this.activeVersion || this.isStorageMutationBlocked()) return EMPTY;
+      this.persistenceErrorSrc.set(null);
+      return this.snapshot$(() =>
+        this.formStoreService.updateForm$(
+          this.editorConfig.editorType,
+          this.convertToRawForm(form),
+        ),
+      ).pipe(
+        switchMap(() => this.refreshWorkspace$()),
+        tap(() => {
+          if (version === this.activeVersion) {
+            this.saveStatusSrc.set(this.activeForm() === form ? 'saved' : 'dirty');
           }
-        },
-        error: () => this.saveStatusSrc.set('error'),
-      });
+        }),
+      );
+    }).subscribe({
+      error: (error) => {
+        this.queuedSaves.delete(version);
+        if (version === this.activeVersion) {
+          this.pendingFormId = undefined;
+          this.handlePersistenceError('save form', error);
+        } else {
+          this.persistenceErrorSrc.set({ action: 'save form', cause: error });
+        }
+      },
+      complete: () => {
+        this.queuedSaves.delete(version);
+        if (this.destroyRef.destroyed || version !== this.activeVersion) return;
+        if (this.saveStatus() === 'dirty') {
+          this.requestSave();
+        } else if (this.pendingFormId) {
+          const target = this.pendingFormId;
+          this.pendingFormId = undefined;
+          this.setActiveForm(target);
+        }
+      },
+    });
   }
 
   protected markFormDirty(): void {
-    this.saveStatusSrc.set('dirty');
-    if (this.autosaveEnabled) {
-      this.autosaveTrigger$.next(this.activeFormId() ?? null);
+    if (this.loadingFormId()) this.cancelLoad();
+    // A failed save needs an explicit retry, even if editing continues.
+    if (this.saveStatus() !== 'error') {
+      this.saveStatusSrc.set(this.queuedSaves.has(this.activeVersion) ? 'saving' : 'dirty');
+      if (this.autosaveEnabled) this.autosaveTrigger$.next(this.activeFormId() ?? null);
     }
   }
 
-  protected refreshHierarchy() {
-    if (this.formStoreService.getHierarchy$) {
-      this.formStoreService
-        .getHierarchy$(this.editorConfig.editorType)
-        .subscribe((hierarchy) => this.hierarchySrc.set(hierarchy));
-    }
+  protected refreshHierarchy(): void {
+    this.enqueue$(() => this.refreshWorkspace$()).subscribe({
+      error: (error) => this.handlePersistenceError('load workspace', error),
+    });
   }
 
   resetCorruptedStorage(): void {
-    const resetStorage = this.formStoreService.resetCorruptedStorage$;
-    if (!resetStorage) {
-      return;
-    }
-
-    resetStorage
-      .call(this.formStoreService, this.editorConfig.editorType)
-      .pipe(
-        switchMap(() => this.formStoreService.getFormList$(this.editorConfig.editorType)),
-        tap((formList) => {
-          this.formListSrc.set(formList);
-          if (!formList.some((form) => form.id === this.activeFormId())) {
-            this.setActiveForm(null);
-            this.saveStatusSrc.set('saved');
-          }
-        }),
-        switchMap(() => this.formStoreService.getHierarchy$(this.editorConfig.editorType)),
-        takeUntilDestroyed(this.destroyRef),
-      )
-      .subscribe((hierarchy) => this.hierarchySrc.set(hierarchy));
+    const reset = this.formStoreService.resetCorruptedStorage$;
+    if (!reset) return;
+    this.runMutation(
+      'reset storage',
+      () =>
+        this.snapshot$(() => reset.call(this.formStoreService, this.editorConfig.editorType)).pipe(
+          switchMap(() => this.refreshWorkspace$()),
+          tap(() => {
+            if (!this.formList().some((form) => form.id === this.activeFormId())) {
+              this.setActiveForm(null);
+            }
+          }),
+        ),
+      true,
+    );
   }
 
   getStorageRecoveryBackup(): string {
@@ -248,104 +344,120 @@ export class BuilderEngineService {
   }
 
   setWorkspaceNodeName(nodeId: string, newName: string): void {
-    if (this.isStorageMutationBlocked()) return;
-
-    const node = this.hierarchyNodeMap()[nodeId];
-    if (!node) return;
-
-    const previousHierarchy = this.hierarchy();
-    const updated = renameNodeInHierarchy(previousHierarchy, nodeId, newName);
-    this.hierarchySrc.set(updated);
-
-    if (this.formStoreService.saveHierarchy$) {
-      this.formStoreService.saveHierarchy$(this.editorConfig.editorType, updated).subscribe({
-        error: (error) => {
-          this.hierarchySrc.set(previousHierarchy);
-          this.handlePersistenceError('rename workspace node', error);
-        },
-      });
-    }
-
-    if (this.hasStorageRecoveryIssues()) return;
-
-    if (node.type === 'form') {
-      this.formStoreService.getForm$(this.editorConfig.editorType, nodeId).subscribe((rawForm) => {
-        if (!rawForm) {
-          return;
-        }
-
-        rawForm.name = newName;
-        this.formStoreService.updateForm$(this.editorConfig.editorType, rawForm).subscribe({
-          next: () => {
-            this.formStoreService
-              .getFormList$(this.editorConfig.editorType)
-              .subscribe((formList) => this.formListSrc.set(formList));
-
-            if (this.activeFormId() === nodeId) {
+    this.runMutation('rename item', () => {
+      const node = this.hierarchyNodeMap()[nodeId];
+      if (!node) return of(undefined);
+      if (node.type === 'form') {
+        const activeName = this.activeFormId() === nodeId ? this.activeFormName() : undefined;
+        return this.snapshot$(() =>
+          this.formStoreService.getForm$(this.editorConfig.editorType, nodeId),
+        ).pipe(
+          switchMap((form) =>
+            form
+              ? this.snapshot$(() =>
+                  this.formStoreService.updateForm$(this.editorConfig.editorType, {
+                    ...form,
+                    name: newName,
+                  }),
+                )
+              : of(undefined),
+          ),
+          tap(() => {
+            if (this.activeFormId() === nodeId && this.activeFormName() === activeName) {
               this.setActiveFormName(newName);
             }
-          },
-          error: (error) => this.handlePersistenceError('rename form', error),
-        });
-      });
-    }
+          }),
+          switchMap(() =>
+            this.snapshot$(() =>
+              this.formStoreService.saveHierarchy$(
+                this.editorConfig.editorType,
+                renameNodeInHierarchy(this.hierarchy(), nodeId, newName),
+              ),
+            ),
+          ),
+        );
+      }
+      return this.snapshot$(() =>
+        this.formStoreService.saveHierarchy$(
+          this.editorConfig.editorType,
+          renameNodeInHierarchy(this.hierarchy(), nodeId, newName),
+        ),
+      );
+    });
   }
 
-  setActiveForm(formId: string | null) {
+  private cancelLoad(): void {
+    this.loadVersion++;
+    this.cancelLoad$.next();
+    this.loadingFormIdSrc.set(null);
+  }
+
+  setActiveForm(formId: string | null): void {
+    if (this.destroyRef.destroyed) return;
+    this.cancelLoad();
+    this.pendingFormId = undefined;
+    this.formLoadErrorSrc.set(null);
     if (!formId) {
-      this.pendingFormId = undefined;
+      this.activeVersion++;
       this.activeFormSrc.set(null);
       this.activeFieldIdSrc.set(null);
+      this.saveStatusSrc.set('saved');
       this.formSelected$.next(null);
       return;
     }
-
-    if (formId === this.activeFormId()) {
-      this.pendingFormId = undefined;
-      return;
-    }
-
+    if (formId === this.activeFormId()) return;
     if (this.hasFormStorageRecoveryIssue()) {
-      this.saveStatusSrc.set('error');
+      this.formLoadErrorSrc.set({ formId, reason: 'recovery-required' });
       return;
     }
-
     if (this.activeForm() && this.saveStatus() !== 'saved') {
       this.pendingFormId = formId;
-      if (this.saveStatus() !== 'saving') {
-        this.saveActiveForm();
-      }
+      this.requestSave();
       return;
     }
 
-    this.formStoreService.getForm$(this.editorConfig.editorType, formId).subscribe((rawForm) => {
-      if (!rawForm) {
-        this.saveStatusSrc.set('error');
-        console.error(`Error loading form with id: ${formId}`);
-        return;
-      }
-
-      if (!this.editorConfig.libraries.find((library) => library.id === rawForm.libraryId)) {
-        this.activeFormSrc.set(null);
-        this.activeFieldIdSrc.set(null);
-        this.formSelected$.next(null);
-        console.error(`Library config with id "${rawForm.libraryId}" not found.`);
-        return;
-      }
-
-      const newActiveForm = this.convertFromRawForm(rawForm);
-      this.activeFormSrc.set(newActiveForm);
-      this.saveStatusSrc.set('saved');
-
-      const restoredFieldId = this.activeFieldIdByFormSrc()[formId];
-      if (restoredFieldId && newActiveForm.fieldMap[restoredFieldId]) {
-        this.activeFieldIdSrc.set(restoredFieldId);
-      } else {
-        this.activeFieldIdSrc.set(newActiveForm.rootFieldIds[0] ?? null);
-      }
-
-      this.formSelected$.next(newActiveForm);
-    });
+    const version = this.loadVersion;
+    this.loadingFormIdSrc.set(formId);
+    this.snapshot$(() => this.formStoreService.getForm$(this.editorConfig.editorType, formId))
+      .pipe(takeUntil(this.cancelLoad$))
+      .subscribe({
+        next: (rawForm) => {
+          if (version !== this.loadVersion) return;
+          this.loadingFormIdSrc.set(null);
+          if (!rawForm) {
+            this.formLoadErrorSrc.set({ formId, reason: 'not-found' });
+            return;
+          }
+          if (!this.editorConfig.libraries.some((library) => library.id === rawForm.libraryId)) {
+            this.formLoadErrorSrc.set({
+              formId,
+              reason: 'missing-library',
+              libraryId: rawForm.libraryId,
+            });
+            return;
+          }
+          let form: EditorForm;
+          try {
+            form = this.convertFromRawForm(rawForm);
+          } catch (cause) {
+            this.formLoadErrorSrc.set({ formId, reason: 'invalid-form', cause });
+            return;
+          }
+          this.activeVersion++;
+          this.activeFormSrc.set(form);
+          this.saveStatusSrc.set('saved');
+          const fieldId = this.activeFieldIdByFormSrc()[formId];
+          this.activeFieldIdSrc.set(
+            fieldId && form.fieldMap[fieldId] ? fieldId : (form.rootFieldIds[0] ?? null),
+          );
+          this.formSelected$.next(form);
+        },
+        error: (cause) => {
+          if (version !== this.loadVersion) return;
+          this.loadingFormIdSrc.set(null);
+          this.formLoadErrorSrc.set({ formId, reason: 'store-error', cause });
+        },
+      });
   }
 
   saveActiveForm() {
@@ -373,149 +485,137 @@ export class BuilderEngineService {
     const newForm = this.convertFromRawForm(newRawForm);
     newRawForm.fieldCount = Object.keys(newForm.fieldMap).length;
 
-    return this.formStoreService
-      .addForm$(this.editorConfig.editorType, newRawForm)
-      .pipe(switchMap(() => this.formStoreService.getFormList$(this.editorConfig.editorType)))
-      .pipe(
-        tap((formList) => {
-          this.formListSrc.set(formList);
-          this.refreshHierarchy();
-          if (setActive) {
-            this.setActiveForm(newForm.id);
-          }
+    return this.enqueue$(() =>
+      this.snapshot$(() =>
+        this.formStoreService.addForm$(this.editorConfig.editorType, newRawForm),
+      ).pipe(
+        switchMap(() => this.refreshWorkspace$()),
+        tap(() => {
+          if (setActive) this.setActiveForm(newForm.id);
         }),
-        map(() => undefined),
-      );
+      ),
+    );
   }
 
-  removeForm(formId: string) {
-    if (this.isStorageMutationBlocked()) return;
+  private clearDeletedSelection(formId: string): void {
+    if (this.loadingFormId() === formId) this.cancelLoad();
+    if (this.pendingFormId === formId) this.pendingFormId = undefined;
+    if (this.activeFormId() === formId) this.setActiveForm(null);
+  }
 
-    this.formStoreService
-      .removeForm$(this.editorConfig.editorType, formId)
-      .pipe(switchMap(() => this.formStoreService.getFormList$(this.editorConfig.editorType)))
-      .subscribe({
-        next: (formList) => {
-          this.formListSrc.set(formList);
-          this.refreshHierarchy();
-          this.setActiveForm(null);
-        },
-        error: (error) => this.handlePersistenceError('remove form', error),
-      });
+  removeForm(formId: string): void {
+    this.runMutation('remove form', () =>
+      this.snapshot$(() =>
+        this.formStoreService.removeForm$(this.editorConfig.editorType, formId),
+      ).pipe(tap(() => this.clearDeletedSelection(formId))),
+    );
   }
 
   createFolder(name: string, parentId: string | null = null): string | undefined {
     if (this.isStorageMutationBlocked()) return undefined;
-
     const folderId = `folder_${uuidv4().substring(0, 8)}`;
-    const parentNode = parentId ? this.hierarchyNodeMap()[parentId] : null;
-    const parentPath = parentNode ? parentNode.idPath : [];
-
-    const folderNode: WorkspaceFolderNode = {
-      id: folderId,
-      name,
-      type: 'folder',
-      parentId,
-      idPath: [...parentPath, folderId],
-      childIds: [],
-      isExpanded: true,
-    };
-
-    const previousHierarchy = this.hierarchy();
-    const updated = addNodeToHierarchy(previousHierarchy, folderNode);
-    this.hierarchySrc.set(updated);
-    if (this.formStoreService.saveHierarchy$) {
-      this.formStoreService.saveHierarchy$(this.editorConfig.editorType, updated).subscribe({
-        error: (error) => {
-          this.hierarchySrc.set(previousHierarchy);
-          this.handlePersistenceError('create folder', error);
-        },
-      });
-    }
+    this.runMutation('create folder', () => {
+      const parentNode = parentId ? this.hierarchyNodeMap()[parentId] : null;
+      const folder: WorkspaceFolderNode = {
+        id: folderId,
+        name,
+        type: 'folder',
+        parentId,
+        idPath: [...(parentNode?.idPath ?? []), folderId],
+        childIds: [],
+        isExpanded: true,
+      };
+      return this.snapshot$(() =>
+        this.formStoreService.saveHierarchy$(
+          this.editorConfig.editorType,
+          addNodeToHierarchy(this.hierarchy(), folder),
+        ),
+      );
+    });
     return folderId;
   }
 
   deleteWorkspaceNode(nodeId: string): void {
-    if (this.isStorageMutationBlocked()) return;
-
-    const node = this.hierarchyNodeMap()[nodeId];
-    if (!node) return;
-
-    if (node.type === 'form') {
-      this.removeForm(nodeId);
-      return;
-    }
-
-    const previousHierarchy = this.hierarchy();
-    const { hierarchy: updatedHierarchy, removedNodeIds } = removeNodeFromHierarchy(
-      previousHierarchy,
-      nodeId,
-    );
-    this.hierarchySrc.set(updatedHierarchy);
-
-    if (this.formStoreService.saveHierarchy$) {
-      this.formStoreService
-        .saveHierarchy$(this.editorConfig.editorType, updatedHierarchy)
-        .subscribe({
-          error: (error) => {
-            this.hierarchySrc.set(previousHierarchy);
-            this.handlePersistenceError('delete workspace node', error);
-          },
-        });
-    }
-
-    if (this.hasStorageRecoveryIssues()) return;
-
-    for (const removedId of removedNodeIds) {
-      if (this.formList().some((f) => f.id === removedId)) {
-        this.formStoreService.removeForm$(this.editorConfig.editorType, removedId).subscribe({
-          error: (error) => this.handlePersistenceError('remove nested form', error),
-        });
-      }
-      if (this.activeFormId() === removedId) {
-        this.setActiveForm(null);
-      }
-    }
-
-    this.formStoreService
-      .getFormList$(this.editorConfig.editorType)
-      .subscribe((formList) => this.formListSrc.set(formList));
+    this.runMutation('delete item', () => {
+      const node = this.hierarchyNodeMap()[nodeId];
+      if (!node) return of(undefined);
+      const { removedNodeIds } = removeNodeFromHierarchy(this.hierarchy(), nodeId);
+      const formIds = removedNodeIds.filter((id) => this.formList().some((form) => form.id === id));
+      const failedFormIds: string[] = [];
+      const failures: unknown[] = [];
+      return from(formIds).pipe(
+        concatMap((id) =>
+          this.snapshot$(() =>
+            this.formStoreService.removeForm$(this.editorConfig.editorType, id),
+          ).pipe(
+            tap(() => this.clearDeletedSelection(id)),
+            catchError((error) => {
+              failedFormIds.push(id);
+              failures.push(error);
+              return of(undefined);
+            }),
+          ),
+        ),
+        toArray(),
+        switchMap(() =>
+          this.snapshot$(() => this.formStoreService.getHierarchy$(this.editorConfig.editorType)),
+        ),
+        switchMap((hierarchy) => {
+          for (const id of formIds.filter((id) => !failedFormIds.includes(id))) {
+            hierarchy = removeNodeFromHierarchy(hierarchy, id).hierarchy;
+          }
+          if (!failedFormIds.length)
+            hierarchy = removeNodeFromHierarchy(hierarchy, nodeId).hierarchy;
+          return this.snapshot$(() =>
+            this.formStoreService.saveHierarchy$(this.editorConfig.editorType, hierarchy),
+          );
+        }),
+        catchError((error) => {
+          failures.push(error);
+          return of(undefined);
+        }),
+        tap(() => {
+          if (failures.length)
+            this.handlePersistenceError(
+              'delete item',
+              new AggregateError(failures, 'Some forms could not be deleted.'),
+              failedFormIds,
+            );
+        }),
+      );
+    });
   }
 
   moveWorkspaceNode(nodeId: string, targetFolderId: string | null, targetIndex?: number): void {
-    if (this.isStorageMutationBlocked()) return;
-
-    try {
-      const previousHierarchy = this.hierarchy();
-      const updated = moveNodeInHierarchy(previousHierarchy, nodeId, targetFolderId, targetIndex);
-      this.hierarchySrc.set(updated);
-      if (this.formStoreService.saveHierarchy$) {
-        this.formStoreService.saveHierarchy$(this.editorConfig.editorType, updated).subscribe({
-          error: (error) => {
-            this.hierarchySrc.set(previousHierarchy);
-            this.handlePersistenceError('move workspace node', error);
-          },
-        });
-      }
-
-      if (this.hasStorageRecoveryIssues()) return;
-
-      const node = updated.nodeMap[nodeId];
-      if (node && node.type === 'form') {
-        this.formStoreService
-          .getForm$(this.editorConfig.editorType, nodeId)
-          .subscribe((rawForm) => {
-            if (rawForm) {
-              rawForm.parentId = targetFolderId;
-              this.formStoreService.updateForm$(this.editorConfig.editorType, rawForm).subscribe({
-                error: (error) => this.handlePersistenceError('move form', error),
-              });
-            }
-          });
-      }
-    } catch (e) {
-      console.error('Failed to move workspace node', e);
-    }
+    this.runMutation('move item', () => {
+      const updated = moveNodeInHierarchy(this.hierarchy(), nodeId, targetFolderId, targetIndex);
+      return this.snapshot$(() =>
+        this.formStoreService.saveHierarchy$(this.editorConfig.editorType, updated),
+      ).pipe(
+        switchMap(() => {
+          if (updated.nodeMap[nodeId]?.type !== 'form') return of(undefined);
+          return this.snapshot$(() =>
+            this.formStoreService.getForm$(this.editorConfig.editorType, nodeId),
+          ).pipe(
+            switchMap((form) =>
+              form
+                ? this.snapshot$(() =>
+                    this.formStoreService.updateForm$(this.editorConfig.editorType, {
+                      ...form,
+                      parentId: targetFolderId,
+                    }),
+                  )
+                : of(undefined),
+            ),
+            tap(() => {
+              const active = this.activeForm();
+              if (active?.id === nodeId)
+                this.activeFormSrc.set({ ...active, parentId: targetFolderId });
+            }),
+          );
+        }),
+      );
+    });
   }
 
   renameWorkspaceNode(nodeId: string, newName: string): void {
@@ -523,19 +623,14 @@ export class BuilderEngineService {
   }
 
   toggleFolderExpansion(folderId: string, isExpanded?: boolean): void {
-    if (this.isStorageMutationBlocked()) return;
-
-    const previousHierarchy = this.hierarchy();
-    const updated = toggleFolderExpansion(previousHierarchy, folderId, isExpanded);
-    this.hierarchySrc.set(updated);
-    if (this.formStoreService.saveHierarchy$) {
-      this.formStoreService.saveHierarchy$(this.editorConfig.editorType, updated).subscribe({
-        error: (error) => {
-          this.hierarchySrc.set(previousHierarchy);
-          this.handlePersistenceError('toggle folder', error);
-        },
-      });
-    }
+    this.runMutation('update folder', () =>
+      this.snapshot$(() =>
+        this.formStoreService.saveHierarchy$(
+          this.editorConfig.editorType,
+          toggleFolderExpansion(this.hierarchy(), folderId, isExpanded),
+        ),
+      ),
+    );
   }
 
   private isStorageMutationBlocked(): boolean {
@@ -546,7 +641,8 @@ export class BuilderEngineService {
     return true;
   }
 
-  private handlePersistenceError(action: string, error: unknown): void {
+  private handlePersistenceError(action: string, error: unknown, failedFormIds?: string[]): void {
+    this.persistenceErrorSrc.set({ action, cause: error, failedFormIds });
     this.saveStatusSrc.set('error');
     console.error(`Failed to ${action}`, error);
   }
@@ -666,7 +762,7 @@ export class BuilderEngineService {
       }
     });
   }
-  convertFromRawForm({ id, name, libraryId, fields, model }: DefaultForm): EditorForm {
+  convertFromRawForm({ id, name, libraryId, fields, model, parentId }: DefaultForm): EditorForm {
     id = id || generateFormId();
     const fieldMap: Record<string, EditorField> = {};
     const fieldTypeOptions = this.getTypeOptions(libraryId);
@@ -688,6 +784,7 @@ export class BuilderEngineService {
       name,
       libraryId,
       fieldCount: Object.keys(fieldMap).length,
+      parentId,
       fieldMap,
       rootFieldIds,
       model,
@@ -700,6 +797,7 @@ export class BuilderEngineService {
     fieldMap,
     rootFieldIds,
     model,
+    parentId,
   }: EditorForm): DefaultForm {
     const fields: EditorField[] = rootFieldIds.map((id) => this.buildField(id, fieldMap));
     fields.forEach((f) => this.cleanField(f));
@@ -710,6 +808,7 @@ export class BuilderEngineService {
       fieldCount: Object.keys(fieldMap).length,
       fields,
       model,
+      parentId,
     };
   }
   getFieldIndex(fieldId: string): number {

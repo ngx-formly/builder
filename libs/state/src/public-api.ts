@@ -44,6 +44,8 @@ export {
   type EngineFieldType,
   type EngineFieldPreset,
   type EngineLibrary,
+  type FormLoadError,
+  type PersistenceError,
 } from './lib/editor/types';
 export {
   modifyPropertyTarget,

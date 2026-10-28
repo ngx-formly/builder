@@ -281,6 +281,18 @@ interface BuilderEngineConfig {
     formStore?: Type<FormStoreService>;
 }
 export declare const BUILDER_ENGINE_CONFIG: InjectionToken<BuilderEngineConfig>;
+/** A failed selection leaves the current document and save status unchanged. */
+interface FormLoadError {
+    formId: string;
+    reason: 'invalid-form' | 'missing-library' | 'not-found' | 'recovery-required' | 'store-error';
+    libraryId?: string;
+    cause?: unknown;
+}
+interface PersistenceError {
+    action: string;
+    cause: unknown;
+    failedFormIds?: string[];
+}
 export declare enum PropertyChangeType {
     KEY = 0,
     VALUE = 1,
@@ -298,6 +310,17 @@ export declare class BuilderEngineService {
     protected readonly formStoreService: FormStoreService;
     private readonly destroyRef;
     private pendingFormId;
+    private readonly cancelLoad$;
+    private loadVersion;
+    private activeVersion;
+    private readonly queuedSaves;
+    private readonly operations$;
+    private readonly loadingFormIdSrc;
+    private readonly formLoadErrorSrc;
+    private readonly persistenceErrorSrc;
+    readonly loadingFormId: import("@angular/core").Signal<null | string>;
+    readonly formLoadError: import("@angular/core").Signal<FormLoadError | null>;
+    readonly persistenceError: import("@angular/core").Signal<PersistenceError | null>;
     private readonly autosaveTrigger$;
     private readonly autosaveEnabled;
     private readonly autosaveDelay;
@@ -337,6 +360,11 @@ export declare class BuilderEngineService {
     readonly activePreviewFormFields: import("@angular/core").Signal<EditorField[]>;
     readonly activeFormFieldsJSON: import("@angular/core").Signal<string>;
     constructor(config: BuilderEngineConfig, store: FormStoreService);
+    private enqueue$;
+    private snapshot$;
+    private refreshWorkspace$;
+    private runMutation;
+    private requestSave;
     protected markFormDirty(): void;
     protected refreshHierarchy(): void;
     resetCorruptedStorage(): void;
@@ -344,9 +372,11 @@ export declare class BuilderEngineService {
     setActiveField(fieldId: null | string): void;
     setActiveFormName(newName: string): void;
     setWorkspaceNodeName(nodeId: string, newName: string): void;
+    private cancelLoad;
     setActiveForm(formId: null | string): void;
     saveActiveForm(): void;
     addForm$(name: string, fields: FormlyFieldConfig[] | undefined, model: Record<string, unknown>, libraryId: string, setActive?: boolean, parentId?: null | string): Observable<void>;
+    private clearDeletedSelection;
     removeForm(formId: string): void;
     createFolder(name: string, parentId?: null | string): string | undefined;
     deleteWorkspaceNode(nodeId: string): void;
@@ -364,8 +394,8 @@ export declare class BuilderEngineService {
     protected insertId(id: string, arr: string[], index: number | undefined): string[];
     buildField(fieldId: string, fieldMap: Record<string, EditorField>): EditorField;
     cleanField(field: EditorField): void;
-    convertFromRawForm({ id, name, libraryId, fields, model }: DefaultForm): EditorForm;
-    convertToRawForm({ id, libraryId, name, fieldMap, rootFieldIds, model }: EditorForm): DefaultForm;
+    convertFromRawForm({ id, name, libraryId, fields, model, parentId }: DefaultForm): EditorForm;
+    convertToRawForm({ id, libraryId, name, fieldMap, rootFieldIds, model, parentId }: EditorForm): DefaultForm;
     getFieldIndex(fieldId: string): number;
     addField(fieldType: string, parentId?: string, index?: number, preset?: EngineFieldPreset): void;
     removeField(fieldId: string): void;
@@ -395,5 +425,5 @@ export declare function clearFieldModelValue(fieldId: string, fieldMap: Record<s
  * Converts a FormlyFieldConfig to an IEditorFormlyField, populating _info and generating ids.
  */
 export declare function convertField(sourceField: FormlyFieldConfig, fieldId: string, formId: string, parentIdPath: string[] | undefined, fieldMap: Record<string, EditorField>, typeOptions: EngineFieldType[], getDefaultField: (type: string) => FormlyFieldConfig): EditorField;
-export type { BaseEditorForm, BaseWorkspaceNode, BuilderEngineConfig, DefaultForm, EditorField, EditorForm, EngineFieldPreset, EngineFieldType, EngineLibrary, FieldInfo, FieldInfoBadge, FormStoreDataKind, FormStoreRecoveryIssue, FormStoreService, PropertyChange, WorkspaceFolderNode, WorkspaceFormNode, WorkspaceHierarchy, WorkspaceNode, WorkspaceNodeType };
+export type { BaseEditorForm, BaseWorkspaceNode, BuilderEngineConfig, DefaultForm, EditorField, EditorForm, EngineFieldPreset, EngineFieldType, EngineLibrary, FieldInfo, FieldInfoBadge, FormLoadError, FormStoreDataKind, FormStoreRecoveryIssue, FormStoreService, PersistenceError, PropertyChange, WorkspaceFolderNode, WorkspaceFormNode, WorkspaceHierarchy, WorkspaceNode, WorkspaceNodeType };
 ```
