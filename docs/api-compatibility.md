@@ -40,8 +40,8 @@ implied here. Update the baseline before enabling the gate if other package chan
 
 The reports use ng-packagr's complete rolled `.d.ts` output plus package export maps, so inherited
 engine contracts and referenced declarations are present either in the same report or the state
-package report. This avoids introducing another declaration bundler. Source-map comments and line
-endings are normalized; all signatures, doc comments and Angular declaration metadata remain.
+package report. This avoids introducing another declaration bundler. Source-map comments, formatting, line
+endings and union-member ordering are normalized; all signatures, doc comments and Angular declaration metadata remain.
 Private declaration changes can produce review noise and may be rebaselined when harmless.
 
 This is a declaration-diff gate, not a semantic proof that every change is breaking or compatible.

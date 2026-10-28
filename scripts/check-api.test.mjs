@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { checkSnapshot, snapshotPackage } from './check-api.mjs';
+import { checkSnapshot, snapshotPackage, normalizeDeclarations } from './check-api.mjs';
 
 test('API gate detects unused exports, signature changes, tokens and stylesheet exports', () => {
   const directory = mkdtempSync(join(tmpdir(), 'builder-api-'));
@@ -62,4 +62,10 @@ test('declaration snapshots fail when build output is missing and normalize line
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
+});
+
+test('normalizes inferred union ordering without hiding type changes', () => {
+  const first = normalizeDeclarations('export type Status = "saved" | "error";');
+  assert.equal(first, normalizeDeclarations('export type Status = "error" | "saved";'));
+  assert.notEqual(first, normalizeDeclarations('export type Status = "error" | "saving";'));
 });

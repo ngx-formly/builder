@@ -1,6 +1,34 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import ts from 'typescript';
+
+export function normalizeDeclarations(content) {
+  const source = ts.createSourceFile('api.d.ts', content, ts.ScriptTarget.Latest, true);
+  const printer = ts.createPrinter({ newLine: ts.NewLineKind.LineFeed });
+  const result = ts.transform(source, [
+    (context) => {
+      const visit = (node) => {
+        node = ts.visitEachChild(node, visit, context);
+        if (ts.isUnionTypeNode(node)) {
+          // TypeScript can emit inferred union members in a different order between builds.
+          const text = (type) => printer.printNode(ts.EmitHint.Unspecified, type, source);
+          return ts.factory.updateUnionTypeNode(
+            node,
+            [...node.types].sort((a, b) => (text(a) < text(b) ? -1 : text(a) > text(b) ? 1 : 0)),
+          );
+        }
+        return node;
+      };
+      return (node) => ts.visitNode(node, visit);
+    },
+  ]);
+  try {
+    return printer.printFile(result.transformed[0]).trimEnd();
+  } finally {
+    result.dispose();
+  }
+}
 
 const packages = ['state', 'core', 'material', 'builder-material'];
 
@@ -22,7 +50,7 @@ export function snapshotPackage(directory) {
           .replace(/\r\n/g, '\n')
           .replace(/^\/\/# sourceMappingURL=.*\n?/gm, '')
           .trimEnd();
-        declarations.push(`// ${path}\n${content}`);
+        declarations.push(`// ${path}\n${normalizeDeclarations(content)}`);
       }
     }
   }
