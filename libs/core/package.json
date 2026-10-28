@@ -24,7 +24,7 @@
     "@codemirror/lang-markdown": "^6.5.2",
     "@codemirror/state": "^6.7.6",
     "@codemirror/view": "^6.43.15",
-    "@ngx-formly/builder-state": "0.0.1",
+    "@ngx-formly/builder-state": ">=0.0.1 <0.1.0",
     "@ngx-formly/core": "^11.0.0",
     "@primeuix/themes": "^2.0.3",
     "@uiw/codemirror-theme-vscode": "^4.25.11",
@@ -48,5 +48,9 @@
   },
   "sideEffects": [
     "**/*.css"
-  ]
+  ],
+  "publishConfig": {
+    "access": "public",
+    "directory": "../../dist/core"
+  }
 }

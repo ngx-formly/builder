@@ -11,12 +11,16 @@
   "peerDependencies": {
     "@angular/common": "^22.0.0",
     "@angular/core": "^22.0.0",
-    "@ngx-formly/builder": "0.0.1",
-    "@ngx-formly/builder-material-fields": "0.0.1",
+    "@ngx-formly/builder": ">=0.0.1 <0.1.0",
+    "@ngx-formly/builder-material-fields": ">=0.0.1 <0.1.0",
     "@ngx-formly/core": "^11.0.0"
   },
   "dependencies": {
     "tslib": "^2.3.0"
   },
-  "sideEffects": false
+  "sideEffects": false,
+  "publishConfig": {
+    "access": "public",
+    "directory": "../../../dist/builder-material"
+  }
 }
