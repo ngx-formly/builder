@@ -1,19 +1,18 @@
-# Formly Editor Documentation
+# ngx-formly Builder Documentation
 
-> Documentation for Formly Editor and its Studio demo, including configuring Studio for custom ngx-formly components and using exported forms in Angular.
+> Documentation for ngx-formly Builder and its Studio demo, including configuring Studio for custom ngx-formly components and using exported forms in Angular.
 
-Formly Editor is an MIT-licensed, open-source editor framework for ngx-formly in Angular. Its editor
-libraries are internal source modules, not published npm packages. Formly Studio is the project's
-browser-local demo application. Its Form Editor exports `FormlyFieldConfig[]` structures for use in
-an Angular application. The documentation covers demo workflows, configuring Studio from a
-repository checkout, and consuming exported forms. It does not cover embedding the editor in
-another application or installing a published editor SDK. It assumes
+ngx-formly Builder is an MIT-licensed visual form builder for Angular. Its embeddable package
+contract is preparing for a first public prerelease as `@ngx-formly/builder`. Studio is its
+browser-local reference application and exports `FormlyFieldConfig[]` for Angular applications.
+These guides cover authoring workflows, configuring a checkout, and consuming exported forms.
+See the repository README for the provisional embedding contract. The documentation assumes
 Angular 22 and Formly 11.x. Consult the upstream Formly documentation for runtime APIs, field types,
 validation, themes, and UI-library behavior.
 
 ## Start here
 
-- [Project overview](https://docs.formlystudio.com/): Formly Editor and its Studio demo application.
+- [Project overview](https://docs.formlystudio.com/): ngx-formly Builder and its Studio demo application.
 - [Form Editor quickstart](https://docs.formlystudio.com/guides/form-editor-quickstart/): Build and configure a form in the Studio demo.
 - [Demo UI profiles](https://docs.formlystudio.com/ui-libraries/): Compare configured demo libraries and review their supported fields.
 - [Developers](https://docs.formlystudio.com/developers/): Configure Studio for your application's Formly setup.

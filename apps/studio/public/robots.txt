@@ -1,4 +1,4 @@
-# Formly Editor robots.txt
+# ngx-formly Builder robots.txt
 # Allow all search engine crawlers to index the site
 
 User-agent: *

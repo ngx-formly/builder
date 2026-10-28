@@ -64,3 +64,22 @@ describe('HomePage', () => {
     );
   });
 });
+
+describe('HomePage branding', () => {
+  it('identifies ngx-formly Builder in the rendered homepage', async () => {
+    await TestBed.configureTestingModule({
+      imports: [HomePage],
+      providers: [
+        { provide: Router, useValue: { navigateByUrl: vi.fn() } },
+        { provide: CreateFormDialogService, useValue: { open: vi.fn() } },
+        { provide: ImportDialogService, useValue: { open: vi.fn() } },
+      ],
+    }).compileComponents();
+    const fixture = TestBed.createComponent(HomePage);
+    fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).toContain(
+      'ngx-formly Builder is a visual authoring tool',
+    );
+    expect(fixture.nativeElement.textContent).not.toContain('Formly Studio');
+  });
+});

@@ -19,9 +19,9 @@ export default defineConfig({
   },
   integrations: [
     starlight({
-      title: 'Formly Editor Docs',
+      title: 'ngx-formly Builder Docs',
       description:
-        'Documentation for Formly Editor, an open-source ngx-formly editor framework, and its Studio demo application.',
+        'Documentation for ngx-formly Builder, an open-source ngx-formly editor framework, and its Studio demo application.',
       social: [],
       sidebar: [
         { label: 'Project Overview', link: '/' },

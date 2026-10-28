@@ -1,11 +1,11 @@
 {
-  "name": "formly-editor",
+  "name": "ngx-formly-builder",
   "version": "0.0.0",
   "author": "Samuel Esan (https://github.com/sesan07)",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/ngx-formly/builder.git"
+    "url": "https://github.com/ngx-formly/ngx-formly-builder.git"
   },
   "homepage": "https://formlystudio.com/",
   "workspaces": [
