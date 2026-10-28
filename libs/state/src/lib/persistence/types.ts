@@ -1,6 +1,6 @@
 import { InjectionToken } from '@angular/core';
 import { Observable } from 'rxjs';
-import { DefaultForm, BaseEditorForm, WorkspaceHierarchy } from '../model/types';
+import { BaseEditorForm, DefaultForm, WorkspaceHierarchy } from '../model/types';
 
 /**
  * Form store interface describing persistence operations.

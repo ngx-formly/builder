@@ -189,3 +189,41 @@ Recovery backups include each issue's original value and its optional `relatedEn
 any other stored values that reset will remove. The local store includes the workspace hierarchy
 when resetting corrupted forms also removes that hierarchy. Resetting only a corrupted hierarchy
 preserves the active form's unsaved edits.
+
+## Headless editing
+
+`@ngx-formly/builder-state` provides Angular editing operations without PrimeNG, CDK or the shell.
+Register `provideBuilderEngine` in a route or environment injector, then inject
+`BuilderEngineService`. Use a different `editorType` for each independent storage namespace.
+
+```ts
+import { BuilderEngineService, provideBuilderEngine } from '@ngx-formly/builder-state';
+
+const providers = [provideBuilderEngine({
+  editorType: 'survey-designer',
+  autoSave: true,
+  libraries: [{
+    id: 'survey',
+    fieldTypes: [{ name: 'input', displayName: 'Input', defaultConfig: {} }],
+  }],
+})];
+// In the configured Angular injection context:
+// const engine = inject(BuilderEngineService);
+// engine.addForm$('Survey', [], {}, 'survey').subscribe();
+// engine.addField('input');
+// engine.activePreviewFormFields() contains exported Formly fields.
+```
+
+Autosave defaults to `true`, with a 3000 ms delay; set `autoSave: false` for explicit saves.
+The provider accepts an optional `formStore` class and `autoSaveDelay`. It does not register Formly
+runtime components. Headless hosts render their own controls and register their chosen Formly
+runtime separately. `BuilderFieldStateService` holds transient per-field UI state without storage.
+The engine owns document edits, selection, hierarchy, autosave and recovery. Its `formSelected$`
+event reports completed loads or unloads; the shell uses it to update library and panel selection.
+
+Existing shell consumers keep `provideFormlyBuilder` and `CoreFormService`. That provider exposes
+the same engine and transient field-state instances through the state entry point. Do not also
+register `provideBuilderEngine` in the same injector. Storage keys and document formats are unchanged.
+
+See [Asynchronous stores and editor lifecycle](docs/asynchronous-stores.md) for custom-store
+contracts, error handling, and saving before closing the editor.

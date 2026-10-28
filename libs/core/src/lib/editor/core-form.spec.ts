@@ -200,13 +200,11 @@ describe('CoreFormService', () => {
     });
 
     it('handles a missing stored form without throwing', () => {
-      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-
       expect(() => service.setActiveForm('missing-form')).not.toThrow();
 
       expect(service.activeForm()).toBeNull();
-      expect(service.saveStatus()).toBe('error');
-      expect(consoleError).toHaveBeenCalledWith('Error loading form with id: missing-form');
+      expect(service.saveStatus()).toBe('saved');
+      expect(service.formLoadError()).toEqual({ formId: 'missing-form', reason: 'not-found' });
     });
 
     it('updates active form model', () => {
@@ -435,8 +433,10 @@ describe('CoreFormService', () => {
       expect(service.saveStatus()).toBe(autoSave !== false ? 'saved' : 'dirty');
     });
 
-    it('does not autosave when the editor config leaves it disabled', () => {
+    it('does not autosave when explicitly disabled', () => {
       vi.useFakeTimers();
+      TestBed.resetTestingModule();
+      configureService({ autoSave: false });
 
       service.addForm$('Explicit Save Form', [], { value: 'initial' }, mockConfig.id).subscribe();
       const formId = service.activeFormId()!;
@@ -462,7 +462,7 @@ describe('CoreFormService', () => {
       vi.advanceTimersByTime(10);
 
       const store = TestBed.inject(CORE_FORM_STORE) as DeferredFormStoreService;
-      expect(store.pendingUpdates).toHaveLength(2);
+      expect(store.pendingUpdates).toHaveLength(1);
 
       store.completeNextUpdate();
       expect(service.saveStatus()).toBe('saving');

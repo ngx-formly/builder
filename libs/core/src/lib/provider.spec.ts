@@ -1,3 +1,9 @@
+import {
+  BuilderEngineService,
+  BuilderFieldStateService as EngineFieldState,
+} from '@ngx-formly/builder-state';
+import { CoreFormService } from './editor/core-form.service';
+import { BuilderFieldStateService } from './editor/builder-field-state.service';
 import { TestBed } from '@angular/core/testing';
 import { Observable, of } from 'rxjs';
 import { describe, expect, it } from 'vitest';
@@ -52,6 +58,8 @@ describe('provideFormlyBuilder', () => {
       providers: [provideFormlyBuilder({ libraries: [library] })],
     });
 
+    expect(TestBed.inject(BuilderEngineService)).toBe(TestBed.inject(CoreFormService));
+    expect(TestBed.inject(EngineFieldState)).toBe(TestBed.inject(BuilderFieldStateService));
     expect(TestBed.inject(CORE_LIBRARY_CONFIGS)).toEqual([library]);
     expect(TestBed.inject(CORE_EDITOR_CONFIG)).toMatchObject({
       editorType: 'form-editor',
