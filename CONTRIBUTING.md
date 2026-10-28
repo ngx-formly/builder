@@ -62,6 +62,9 @@ tests.
 - Treat exported symbols and dependency-injection tokens as compatibility commitments.
 - Add behavior-focused tests for state transitions and document transformations.
 
+The [PrimeNG migration plan](docs/primeng-migration.md) inventories shell dependencies and defines
+bounded replacement steps and consumer migration checks.
+
 ## Pull requests
 
 Describe the user-facing outcome, compatibility impact, and validation performed. Include migration
