@@ -1,6 +1,6 @@
 # Angular NG0318 style bindings
 
-Investigation for [#13](https://github.com/ngx-formly/builder/issues/13), on main revision
+Investigation for [#13](https://github.com/ngx-formly/ngx-formly-builder/issues/13), on main revision
 `da1d33e` with Angular 22.2.3 and PrimeNG 21.1.10.
 
 ## Reproduction
@@ -35,7 +35,7 @@ It does not modify PrimeNG prototypes, other applications' chips, or console log
 
 The workaround depends on PrimeNG's exported `ChipStyle` and its `inlineStyles.root` shape.
 Recheck it when upgrading PrimeNG. Remove it when upstream returns valid CSS values, or when
-chips are replaced under the [PrimeNG removal plan, #8](https://github.com/ngx-formly/builder/issues/8).
+chips are replaced under the [PrimeNG removal plan, #8](https://github.com/ngx-formly/ngx-formly-builder/issues/8).
 This change does not remove the other PrimeNG dependencies or the Angular peer overrides.
 Consumers that relied on the builder's undocumented local `MessageService` provider must supply
 their own service and notification component.

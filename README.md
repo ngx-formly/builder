@@ -19,6 +19,21 @@ The project originated from the community evaluation in
 Formly Studio as the initial authoring foundation and will incorporate the strongest engineering
 and schema workflows from the other community builders.
 
+## Name and canonical URLs
+
+The application and documentation use **ngx-formly Builder**. `Studio` remains the reference
+application's source-folder name, and `Studio Material` remains a UI profile name.
+The configured application URL is [formlystudio.com](https://formlystudio.com/), and package
+homepages point to [docs.formlystudio.com](https://docs.formlystudio.com/). These existing origins
+remain in use until maintainers choose and deploy replacement domains; the new name does not
+imply a domain move. Canonical/social metadata, crawler files and documentation links retain
+those origins. The repository is [ngx-formly/ngx-formly-builder](https://github.com/ngx-formly/ngx-formly-builder).
+
+When domains change, update both deployments, redirects, canonical/social URLs, sitemaps, crawler
+files, the docs build's `site` setting and header links together. Local browser storage is tied
+to an origin, so provide an export/import migration before a domain move. This branding change
+preserves all `formly-studio-*` storage keys and the project's author and provenance attribution.
+
 ## Development
 
 Use Node.js 24.15 or newer within the Node.js 24 release line and npm 11.19.0.

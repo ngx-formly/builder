@@ -23,8 +23,8 @@ import { ActionButton } from './action-button';
           Build ngx-formly forms visually.
         </h1>
         <p class="text-color-secondary max-w-xl text-lg leading-8">
-          Formly Studio is a visual authoring tool for ngx-formly, the JSON-powered dynamic forms
-          library for Angular. Create, preview, and export Formly field configurations with
+          ngx-formly Builder is a visual authoring tool for ngx-formly, the JSON-powered dynamic
+          forms library for Angular. Create, preview, and export Formly field configurations with
           templates to help you get started.
         </p>
         <a

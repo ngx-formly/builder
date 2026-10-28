@@ -69,7 +69,7 @@ The metadata `name` must match the runtime type. `defaultConfig` supplies insert
 the property key `props.mask` identifies the value edited in the field configuration. The component
 must actually consume that property. This compact example exposes only a subset of the component's
 options; use the
-[full Studio metadata](https://github.com/ngx-formly/builder/blob/main/apps/studio/src/app/form-editor/studio-material/studio-material.options.ts)
+[full Studio metadata](https://github.com/ngx-formly/ngx-formly-builder/blob/main/apps/studio/src/app/form-editor/studio-material/studio-material.options.ts)
 for boolean, select, validation, and preset examples.
 
 ## 3. Exercise it in a template
@@ -122,8 +122,8 @@ your consuming application must supply the same runtime dependencies. See Formly
 | Preview works but the exported form fails    | Register the same types, wrappers, validators, services, and styles in the consuming app. |
 
 Adapt the existing
-[Studio profile tests](https://github.com/ngx-formly/builder/blob/main/apps/studio/src/app/form-editor/studio-material/studio-material.library.spec.ts)
-and [integration tests](https://github.com/ngx-formly/builder/blob/main/apps/studio/src/app/form-editor/studio-material/studio-material.integration.spec.ts).
+[Studio profile tests](https://github.com/ngx-formly/ngx-formly-builder/blob/main/apps/studio/src/app/form-editor/studio-material/studio-material.library.spec.ts)
+and [integration tests](https://github.com/ngx-formly/ngx-formly-builder/blob/main/apps/studio/src/app/form-editor/studio-material/studio-material.integration.spec.ts).
 Check catalog/runtime names, defaults, wrapper compatibility, template `libraryId`, property edits,
 profile switching, and exported fields without editor `_info` metadata. Run `npm run test:studio`
 and `npm run build:studio`; also run the affected library suite if you change a reusable component.

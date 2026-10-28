@@ -19,8 +19,8 @@ import { ThemeToggle } from './theme-toggle';
         <h1 class="truncate text-xl font-bold">
           <a
             routerLink="/"
-            aria-label="Go to Formly Studio home page"
-            >Formly Studio</a
+            aria-label="Go to ngx-formly Builder home page"
+            >ngx-formly Builder</a
           >
         </h1>
       </div>
@@ -30,7 +30,7 @@ import { ThemeToggle } from './theme-toggle';
           text
           rounded
           class="shrink-0"
-          aria-label="Open Formly Studio documentation"
+          aria-label="Open ngx-formly Builder documentation"
           title="Documentation"
           target="_blank"
           rel="noopener noreferrer"
@@ -51,11 +51,11 @@ import { ThemeToggle } from './theme-toggle';
           text
           rounded
           class="shrink-0"
-          aria-label="Open Formly Editor GitHub repository"
+          aria-label="Open ngx-formly Builder GitHub repository"
           title="GitHub"
           target="_blank"
           rel="noopener"
-          href="https://github.com/ngx-formly/builder"
+          href="https://github.com/ngx-formly/ngx-formly-builder"
         >
           <svg
             pButtonIcon
