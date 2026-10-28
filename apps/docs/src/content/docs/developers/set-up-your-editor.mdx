@@ -3,7 +3,7 @@ title: Set up your editor
 description: Run a local checkout of Studio as an editor for your application's ngx-formly components.
 ---
 
-Use a local checkout of Formly Editor to build an authoring environment for your application's
+Use a local checkout of ngx-formly Builder to build an authoring environment for your application's
 Formly setup. Studio is the reference implementation: you will add a UI profile to its existing
 editor, not create a new Angular application.
 
@@ -12,8 +12,8 @@ editor, not create a new Angular application.
 Use Node.js 24.15 or newer within the Node.js 24 release line and npm 11.19.0. From a terminal:
 
 ```bash
-git clone https://github.com/ngx-formly/builder.git
-cd builder
+git clone https://github.com/ngx-formly/ngx-formly-builder.git
+cd ngx-formly-builder
 npm ci
 npm start
 ```
@@ -38,9 +38,9 @@ the editor's authoring controls:
 | `form-editor.provider.ts` | Register the profile with Studio.                                   |
 
 Start with the
-[Material profile](https://github.com/ngx-formly/builder/tree/main/apps/studio/src/app/form-editor/material)
+[Material profile](https://github.com/ngx-formly/ngx-formly-builder/tree/main/apps/studio/src/app/form-editor/material)
 for standard controls. The
-[Studio Material profile](https://github.com/ngx-formly/builder/tree/main/apps/studio/src/app/form-editor/studio-material)
+[Studio Material profile](https://github.com/ngx-formly/ngx-formly-builder/tree/main/apps/studio/src/app/form-editor/studio-material)
 shows custom components and builder-only adaptations. Runtime implementations live in
 `libs/ui/material`; the shared editor lives in `libs/core`.
 

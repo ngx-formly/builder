@@ -4,7 +4,7 @@ export const routes: Routes = [
   {
     path: '',
     pathMatch: 'full',
-    title: 'Formly Studio | Visual ngx-formly Form Builder',
+    title: 'ngx-formly Builder | Visual Angular Form Builder',
     loadComponent: () => import('./home/home-page').then((m) => m.HomePage),
   },
   {

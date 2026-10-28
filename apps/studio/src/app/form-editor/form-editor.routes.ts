@@ -7,7 +7,7 @@ export const formEditorRoutes: Routes = [
     providers: [provideFormEditor()],
     children: [
       {
-        title: 'Form Editor | Formly Studio',
+        title: 'Form Editor | ngx-formly Builder',
         path: '',
         loadComponent: () => import('./form-editor').then((m) => m.FormEditorApp),
       },

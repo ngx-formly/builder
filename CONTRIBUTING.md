@@ -50,6 +50,9 @@ opens that consumer in Chromium at desktop and mobile sizes, checks its styles, 
 It uses port 4314 and does not reuse a running server. CI runs this alongside the Studio browser
 tests.
 
+See the [package architecture proposal](docs/package-architecture.md) for engine/shell ownership,
+public entry points and the extraction sequence.
+
 ## Architecture rules
 
 - Keep the Studio application dependent on libraries, not the reverse.

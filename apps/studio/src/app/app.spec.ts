@@ -20,7 +20,7 @@ describe('App', () => {
     const fixture = TestBed.createComponent(App);
     fixture.detectChanges();
     const compiled = fixture.nativeElement as HTMLElement;
-    expect(compiled.querySelector('h1')?.textContent).toContain('Formly Studio');
+    expect(compiled.querySelector('h1')?.textContent).toContain('ngx-formly Builder');
   });
 
   it('renders a GitHub repository link in the header', () => {
@@ -29,10 +29,10 @@ describe('App', () => {
 
     const root = fixture.nativeElement as HTMLElement;
     const link = root.querySelector<HTMLAnchorElement>(
-      'app-header a[aria-label="Open Formly Editor GitHub repository"]',
+      'app-header a[aria-label="Open ngx-formly Builder GitHub repository"]',
     );
 
-    expect(link?.getAttribute('href')).toBe('https://github.com/ngx-formly/builder');
+    expect(link?.getAttribute('href')).toBe('https://github.com/ngx-formly/ngx-formly-builder');
     expect(link?.getAttribute('target')).toBe('_blank');
     expect(link?.getAttribute('rel')).toBe('noopener');
     expect(link?.getAttribute('title')).toBe('GitHub');
@@ -55,7 +55,9 @@ describe('App', () => {
     expect(root.querySelector(':scope > app-header')).not.toBeNull();
     expect(root.querySelector(':scope > main > router-outlet')).not.toBeNull();
     expect(root.querySelector(':scope > main > app-home-page')).not.toBeNull();
-    expect(TestBed.inject(Title).getTitle()).toBe('Formly Studio | Visual ngx-formly Form Builder');
+    expect(TestBed.inject(Title).getTitle()).toBe(
+      'ngx-formly Builder | Visual Angular Form Builder',
+    );
   });
 
   it.each(['/form-editor', '/form-editor/unknown', '/unknown'])(
@@ -72,12 +74,12 @@ describe('App', () => {
       expect(router.url).toBe('/form-editor');
       const root = fixture.nativeElement as HTMLElement;
       expect(root.querySelector(':scope > main > app-form-editor')).not.toBeNull();
-      expect(TestBed.inject(Title).getTitle()).toBe('Form Editor | Formly Studio');
+      expect(TestBed.inject(Title).getTitle()).toBe('Form Editor | ngx-formly Builder');
 
       await router.navigateByUrl('/');
       await fixture.whenStable();
       expect(TestBed.inject(Title).getTitle()).toBe(
-        'Formly Studio | Visual ngx-formly Form Builder',
+        'ngx-formly Builder | Visual Angular Form Builder',
       );
     },
   );
